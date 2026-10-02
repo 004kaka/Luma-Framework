@@ -11,9 +11,10 @@ jobs:
     # runs-on: windows-2022
     runs-on: windows-2025-vs2026
     strategy:
+      fail-fast: false
       matrix:
-        config: [Development-Debug, Development-Release, Test-Release, Publishing-Release]
-        platform: [x64, Win32]
+        configuration: [Publishing-Release]
+        platform: [x64]
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
