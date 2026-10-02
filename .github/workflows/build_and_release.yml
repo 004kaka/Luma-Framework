@@ -27,7 +27,6 @@ jobs:
       with:
         name: Luma-Persona_5_Royal
         path: |
-          bin/x64/Publishing-Release/
-          Output/
-          **/*.addon64
-        if-no-files-found: warn
+          Source/Games/Persona 5 Royal/Binaries/x64-Publishing-Release/
+          Source/Games/Persona 5 Royal/Binaries/
+        if-no-files-found: error
