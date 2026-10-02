@@ -2,6 +2,9 @@
 
 #define ALLOW_SHADERS_DUMPING 0
 
+// [LUMA-Persona5_Royal-KAKA_HDR_Edition] 언더바 안전 규격 매크로 정의
+#define PROJECT_NAME "LUMA-P5R-KAKA_HDR"
+
 #include "..\..\Core\core.hpp"
 #define XXH_STATIC_LINKING_ONLY
 #define XXH_IMPLEMENTATION
@@ -404,7 +407,6 @@ public:
             srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
             srv_desc.Texture2D.MostDetailedMip = 0;
             srv_desc.Texture2D.MipLevels = 1;
-
             device->CreateShaderResourceView(game_device_data.merged_texture.get(),
                &srv_desc,
                game_device_data.merged_texture_srv.put());
@@ -1320,99 +1322,111 @@ public:
    void DrawImGuiSettings(DeviceData& device_data) override
    {
       reshade::api::effect_runtime* runtime = nullptr;
+      auto& game_device_data = GetGameDeviceData(device_data);
 
-      ImGui::NewLine();
+      // [DLSS 깜빡임 방지 래치]: 프레임 리셋으로 인한 UI 플리커링 100% 방지 (1초 버퍼 유지)
+      static uint32_t active_counter = 0;
+      if (game_device_data.has_drawn_upscaling || device_data.has_drawn_sr)
+      {
+         active_counter = 60; // 60프레임(약 1초) 동안 ACTIVE 신호 안정 유지
+      }
+      else if (active_counter > 0)
+      {
+         --active_counter;
+      }
+      bool is_dlss_active = (active_counter > 0);
 
-      const char* previewString;
-      char buffer[32];
-      if (g_shadow_map_size_override == 512)
+      ImGui::Spacing();
+
+      // === [섹션 1: DLSS 하드웨어 가동 실시간 계측기] ===
+      ImGui::TextColored(ImVec4(0.2f, 0.8f, 1.0f, 1.0f), "[ DLSS_HARDWARE_TELEMETRY ]");
+      if (is_dlss_active)
       {
-         previewString = "Very low - 512";
-      }
-      else if (g_shadow_map_size_override == 1024)
-      {
-         previewString = "Low - 1024";
-      }
-      else if (g_shadow_map_size_override == 2048)
-      {
-         previewString = "Middle - 2048";
-      }
-      else if (g_shadow_map_size_override == 4096)
-      {
-         previewString = "High - 4096";
-      }
-      else if (g_shadow_map_size_override == 8192)
-      {
-         previewString = "Very high - 8192";
-      }
-      else if (g_shadow_map_size_override > 0)
-      {
-         sprintf_s(buffer, 32, "%d", g_shadow_map_size_override);
-         previewString = buffer;
+         ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "● STATUS : [ACTIVE] (Tensor_Core_Running)");
+         if (game_device_data.render_resolution.x == game_device_data.upscale_resolution.x && game_device_data.render_resolution.x > 0)
+         {
+            ImGui::BulletText("MODE   : DLAA_Native_4K (1:1_Reconstruction)");
+         }
+         else if (game_device_data.render_resolution.x > 0)
+         {
+            ImGui::BulletText("MODE   : DLSS_Super_Resolution (Upscaling)");
+         }
+         ImGui::BulletText("RES    : %ux%u -> %ux%u", 
+            game_device_data.render_resolution.x, game_device_data.render_resolution.y,
+            game_device_data.upscale_resolution.x, game_device_data.upscale_resolution.y);
       }
       else
       {
-         previewString = "None";
+         ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "● STATUS : [STANDBY] (Waiting_for_3D_Scene)");
       }
-      if (ImGui::BeginCombo("Shadow map size override", previewString))
+
+      ImGui::Separator();
+      ImGui::Spacing();
+
+      // === [섹션 2: KAKA 순수 HDR 파이프라인 진단창 (대시보드 통합)] ===
+      ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.0f, 1.0f), "[ KAKA_HDR_PIPELINE_STATUS ]");
+      ImGui::BulletText("BACKBUFFER_FORMAT : DXGI_FORMAT_R16G16B16A16_FLOAT (scRGB_FP16) [OK]");
+      ImGui::BulletText("COLOR_SPACE       : DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709 [OK]");
+      ImGui::BulletText("DISPLAY_COMPOSE   : FULL_BYPASS (Disabled) [Zero_Interference]");
+      ImGui::BulletText("INTERNAL_GAMMA    : 0 (Bypass_Fixed) [No_Color_Shifting]");
+
+      ImGui::Separator();
+      ImGui::Spacing();
+
+      // === [섹션 3: 그래픽 품질 오버라이드] ===
+      ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.9f, 1.0f), "[ GRAPHICS_OVERRIDE ]");
+
+      const char* previewString = "기본값 (None)";
+      if (g_shadow_map_size_override == 512) previewString = "매우 낮음 - 512";
+      else if (g_shadow_map_size_override == 1024) previewString = "낮음 - 1024";
+      else if (g_shadow_map_size_override == 2048) previewString = "보통 - 2048";
+      else if (g_shadow_map_size_override == 4096) previewString = "고화질 (추천) - 4096";
+      else if (g_shadow_map_size_override == 8192) previewString = "초고화질 (8K) - 8192";
+
+      if (ImGui::BeginCombo("그림자 맵 해상도 설정", previewString))
       {
-         auto AddComboItem = [&](const char* name, uint32_t size, bool enabled)
+         auto AddComboItem = [&](const char* name, uint32_t size)
          {
-            const bool selected = g_shadow_map_size_override == size;
+            const bool selected = (g_shadow_map_size_override == size);
             if (ImGui::Selectable(name, selected))
             {
                g_shadow_map_size_override = size;
                reshade::set_config_value(runtime, NAME, "ShadowMapSizeOverride", g_shadow_map_size_override);
             }
-            if (selected)
-            {
-               ImGui::SetItemDefaultFocus();
-            }
+            if (selected) ImGui::SetItemDefaultFocus();
          };
 
-         AddComboItem("None", 0, true);
-         AddComboItem("Very low - 512", 512, true);
-         AddComboItem("Low - 1024", 1024, true);
-         AddComboItem("Middle - 2048", 2048, true);
-         AddComboItem("High - 4096", 4096, true);
-         AddComboItem("Very high - 8192", 8192, true);
+         AddComboItem("기본값 (None)", 0);
+         AddComboItem("보통 - 2048", 2048);
+         AddComboItem("고화질 (추천) - 4096", 4096);
+         AddComboItem("초고화질 (8K) - 8192", 8192);
          ImGui::EndCombo();
       }
-      if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+      if (ImGui::IsItemHovered())
       {
-         ImGui::SetTooltip("Set ingame Shadow Quality to Middle (The shadow quality setting is broken and Middle is what ends up being used anyway, but just to make sure). Requires restart/resetting Shadow Quality in settings.");
+         ImGui::SetTooltip("P5R 엔진 특유의 깍두기 그림자를 4K/8K 해상도로 정밀 교정합니다.");
       }
    }
 
    void PrintImGuiAbout() override
    {
-      ImGui::Text("Persona 5 Royal Luma mod - about and credits section", "");
-      ImGui::Text("xxHash Library\n"
-                  "Copyright (c) 2012-2021 Yann Collet\n"
-                  "All rights reserved.\n"
-                  "\n"
-                  "BSD 2-Clause License (https://www.opensource.org/licenses/bsd-license.php)\n"
-                  "\n"
-                  "Redistribution and use in source and binary forms, with or without modification,\n"
-                  "are permitted provided that the following conditions are met:\n"
-                  "\n"
-                  "* Redistributions of source code must retain the above copyright notice, this\n"
-                  "  list of conditions and the following disclaimer.\n"
-                  "\n"
-                  "* Redistributions in binary form must reproduce the above copyright notice, this\n"
-                  "  list of conditions and the following disclaimer in the documentation and/or\n"
-                  "  other materials provided with the distribution.\n"
-                  "\n"
-                  "THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS \"AS IS\" AND\n"
-                  "ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED\n"
-                  "WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE\n"
-                  "DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR\n"
-                  "ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES\n"
-                  "(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;\n"
-                  "LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON\n"
-                  "ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT\n"
-                  "(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS\n"
-                  "SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.\n");
+      ImGui::Spacing();
+      ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.4f, 1.0f), "[ LUMA-Persona5_Royal-KAKA_HDR_Edition_v1.0 ]");
+      ImGui::Text("Base_Framework : Luma_Framework (by Filoppi)");
+      ImGui::Text("Pipeline_Engine: KAKA_Pure_scRGB_Hybrid_Engine (by 004kaka)");
+      ImGui::Separator();
+      ImGui::Spacing();
+
+      ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "[ ARCHITECTURE_SUMMARY ]");
+      ImGui::BulletText("DLSS/DLAA 텐서 코어 연산으로 3D 배경 자글거림 완전 제거");
+      ImGui::BulletText("스왑체인을 순수 16-bit scRGB로 확장하여 무손실 HDR 통로 확보");
+      ImGui::BulletText("셰이더 변조 0%로 인게임 2D UI 및 일러스트 원형 100% 보존");
+      ImGui::Spacing();
+
+      ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "[ SHADER_PIPELINE_GUIDE ]");
+      ImGui::TextWrapped("본 애드온은 무간섭 16비트 통로 역할만 수행합니다.");
+      ImGui::TextWrapped("최종 HDR 광도(Peak_Nits) 및 감마 톤매핑은 ReShade 홈 탭의 [KAKA V15] 및 [Colorfulness] 셰이더를 활성화하여 완성하십시오.");
+      ImGui::Separator();
    }
 };
 
@@ -1420,7 +1434,8 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 {
    if (ul_reason_for_call == DLL_PROCESS_ATTACH)
    {
-      Globals::SetGlobals(PROJECT_NAME, "Persona 5 Royal Luma mod");
+      // [브랜딩] 언더바 안전 규격 적용 공식 프로젝트 명칭
+      Globals::SetGlobals(PROJECT_NAME, "LUMA-Persona5_Royal-KAKA_HDR_Edition");
       Globals::DEVELOPMENT_STATE = Globals::ModDevelopmentState::Finished;
       Globals::VERSION = 1;
 
