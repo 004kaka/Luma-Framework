@@ -3,33 +3,6 @@
 #define ALLOW_SHADERS_DUMPING 0
 
 #include "..\..\Core\core.hpp"
-/* === [KAKA scRGB Hybrid Bridge: 순수 16비트 스왑체인 통로 개방] === */
-#include <dxgi1_6.h>
-
-static bool KAKA_OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd)
-{
-    // ReShade 최신 API 규격: back_buffer 또는 format 직접 지정
-    desc.back_buffer.texture.format = reshade::api::format::r16g16b16a16_float;
-    return true; 
-}
-
-static void KAKA_OnInitSwapchain(reshade::api::swapchain* swapchain)
-{
-    if (swapchain == nullptr) return;
-
-    IDXGISwapChain* native_swapchain = reinterpret_cast<IDXGISwapChain*>(swapchain->get_native());
-    if (native_swapchain != nullptr)
-    {
-        IDXGISwapChain4* swapchain4 = nullptr;
-        if (SUCCEEDED(native_swapchain->QueryInterface(IID_PPV_ARGS(&swapchain4))))
-        {
-            swapchain4->SetColorSpace1(DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709);
-            swapchain4->Release();
-        }
-    }
-}
-/* ================================================================= */
-
 #define XXH_STATIC_LINKING_ONLY
 #define XXH_IMPLEMENTATION
 #include "xxhash.h"
@@ -1486,33 +1459,20 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
       // cbuffer slots are fairly spread out for compute shaders any slot from 2 upwards is free,
       // for pixel shaders 7 seem unused, for vertex shaders no slots are unused
       luma_settings_cbuffer_index = 7;
-      swapchain_upgrade_type = SwapchainUpgradeType::None;
+
+      // 1) 백버퍼를 16비트 실수형(RGBA16_FLOAT)으로 강제 승격
+      swapchain_format_upgrade_type = TextureFormatUpgradesType::AllowedEnabled;
+
+      // 2) DXGI 색공간을 순수 선형 scRGB로 지정
+      swapchain_upgrade_type = SwapchainUpgradeType::scRGB;
+
+      // 3) 루마의 엉성한 자체 톤매퍼는 끄고 우리 KAKA 셰이더에게 넘김
       force_disable_display_composition = true;
 
       game = new Persona5Royal();
    }
    else if (ul_reason_for_call == DLL_PROCESS_DETACH)
    {
-     // KAKA scRGB 스왑체인 이벤트 등록
-        reshade::register_event<reshade::addon_event::create_swapchain>(
-            [](reshade::api::swapchain_desc& desc, void* hwnd) -> bool {
-                desc.back_buffer.texture.format = reshade::api::format::r16g16b16a16_float;
-                return true;
-            });
-
-        reshade::register_event<reshade::addon_event::init_swapchain>(
-            [](reshade::api::swapchain* swapchain) {
-                if (!swapchain) return;
-                IDXGISwapChain* native_sc = reinterpret_cast<IDXGISwapChain*>(swapchain->get_native());
-                if (native_sc) {
-                    IDXGISwapChain4* sc4 = nullptr;
-                    if (SUCCEEDED(native_sc->QueryInterface(IID_PPV_ARGS(&sc4)))) {
-                        sc4->SetColorSpace1(DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709);
-                        sc4->Release();
-                    }
-                }
-            });
-      
       reshade::unregister_event<reshade::addon_event::execute_secondary_command_list>(Persona5Royal::OnExecuteSecondaryCommandList);
       reshade::unregister_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(Persona5Royal::OnBindRenderTargetsAndDepthStencil);
       reshade::unregister_event<reshade::addon_event::map_buffer_region>(Persona5Royal::OnMapBufferRegion);
