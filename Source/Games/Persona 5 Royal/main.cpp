@@ -1472,27 +1472,27 @@ public:
 
       if (dlss_active)
       {
-         ImGui::TextColored(ImVec4(0.20f, 1.0f, 0.35f, 1.0f), "● DLSS SUPER RESOLUTION ACTIVE");
+         ImGui::TextColored(ImVec4(0.20f, 1.0f, 0.35f, 1.0f), "● DLSS ACTIVE");
          ImGui::TextWrapped(
-            "현재 확인된 Luma의 SR 상태를 종합하면 DLSS Super Resolution이 정상적으로 활성화되어 작동하고 있습니다.");
+            "NVIDIA DLSS 기능이 작동하고 있습니다.");
       }
       else if (dlss_failed)
       {
          ImGui::TextColored(ImVec4(1.0f, 0.25f, 0.25f, 1.0f), "● DLSS SUPER RESOLUTION ERROR");
          ImGui::TextWrapped(
-            "DLSS Super Resolution이 선택되어 있지만 가장 최근 SR 처리 호출이 실패했습니다. 아래의 세부 상태를 확인하십시오.");
+            "DLSS Super Resolution이 선택되어 있지만 최근 처리에 실패했습니다.");
       }
       else if (dlss_waiting)
       {
          ImGui::TextColored(ImVec4(1.0f, 0.80f, 0.20f, 1.0f), "● DLSS SUPER RESOLUTION CHECKING");
          ImGui::TextWrapped(
-            "DLSS Super Resolution은 선택되어 있습니다. 아직 이번 실행에서 SR 처리 결과가 기록되지 않았습니다.");
+            "DLSS Super Resolution이 선택되어 있습니다. 아직 SR 처리 결과가 확인되지 않았습니다.");
       }
       else
       {
          ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.70f, 1.0f), "● DLSS SUPER RESOLUTION OFF");
          ImGui::TextWrapped(
-            "현재 Luma의 Super Resolution 구현체가 선택되어 있지 않습니다.");
+            "현재 DLSS Super Resolution이 선택되어 있지 않습니다.");
       }
 
       ImGui::Spacing();
@@ -1507,13 +1507,13 @@ public:
       {
          ImGui::TextColored(ImVec4(0.20f, 1.0f, 0.35f, 1.0f), "● HDR ACTIVE");
          ImGui::TextWrapped(
-            "현재 코드에서 확인 가능한 HDR 출력 경로가 모두 구성되어 있어 HDR 출력 경로가 활성화된 것으로 판단합니다.");
+            "HDR 출력이 활성화되어 있습니다.");
       }
       else
       {
          ImGui::TextColored(ImVec4(1.0f, 0.25f, 0.25f, 1.0f), "● HDR OUTPUT INCOMPLETE");
          ImGui::TextWrapped(
-            "HDR 출력 경로에 필요한 설정 중 일부가 맞지 않습니다. 아래 HDR 세부 항목을 확인하십시오.");
+            "HDR 출력에 필요한 설정이 모두 활성화되지 않았습니다. 아래 HDR 세부 항목을 확인하십시오.");
       }
 
       ImGui::Spacing();
@@ -1521,7 +1521,60 @@ public:
       ImGui::Spacing();
 
       // ------------------------------------------------------------------
-      // 3. DLSS / SR 세부 확인
+      // 3. DLSS Mode
+      //    현재 실제 렌더링/출력 해상도 비율을 기준으로 표시합니다.
+      // ------------------------------------------------------------------
+      ImGui::TextColored(ImVec4(0.35f, 0.75f, 1.0f, 1.0f), "DLSS MODE");
+      ImGui::Separator();
+
+      if (sr_last_attempted && game_device_data.debug_sr_last_output_resolution.y > 0 &&
+          game_device_data.debug_sr_last_render_resolution.y > 0)
+      {
+         const float scale = static_cast<float>(game_device_data.debug_sr_last_render_resolution.y) /
+            static_cast<float>(game_device_data.debug_sr_last_output_resolution.y);
+         const char* dlss_mode = "DLSS";
+         const char* dlss_mode_description = "현재 렌더링 해상도에 맞춰 DLSS Super Resolution이 화면을 처리합니다.";
+
+         if (scale >= 0.98f)
+         {
+            dlss_mode = "DLAA";
+            dlss_mode_description = "입력 해상도와 출력 해상도가 같습니다.\n원래 해상도로 렌더링한 화면에 AI 기반 안티앨리어싱을 적용합니다.\n게임에 내장된 안티앨리어싱 기능은 끄는 것을 권장합니다.";
+         }
+         else if (scale >= 0.63f)
+         {
+            dlss_mode = "Quality";
+            dlss_mode_description = "입력 해상도를 약 67%로 낮춰 렌더링한 후,\n출력 해상도에 맞게 화면을 재구성합니다.";
+         }
+         else if (scale >= 0.54f)
+         {
+            dlss_mode = "Balanced";
+            dlss_mode_description = "입력 해상도를 약 58%로 낮춰 렌더링한 후,\n출력 해상도에 맞게 화면을 재구성합니다.";
+         }
+         else if (scale >= 0.42f)
+         {
+            dlss_mode = "Performance";
+            dlss_mode_description = "입력 해상도를 약 50%로 낮춰 렌더링한 후,\n출력 해상도에 맞게 화면을 재구성합니다.";
+         }
+         else
+         {
+            dlss_mode = "Ultra Performance";
+            dlss_mode_description = "입력 해상도를 약 33%로 낮춰 렌더링한 후,\n출력 해상도에 맞게 화면을 재구성합니다.";
+         }
+
+         ImGui::Text("● %s", dlss_mode);
+         ImGui::TextWrapped("%s", dlss_mode_description);
+      }
+      else
+      {
+         ImGui::TextColored(ImVec4(1.0f, 0.80f, 0.20f, 1.0f), "● WAITING");
+      }
+
+      ImGui::Spacing();
+      ImGui::Separator();
+      ImGui::Spacing();
+
+      // ------------------------------------------------------------------
+      // 4. DLSS / SR 세부 확인
       // ------------------------------------------------------------------
       ImGui::TextColored(ImVec4(0.35f, 0.75f, 1.0f, 1.0f), "DLSS / SR DEBUG");
       ImGui::Separator();
@@ -1543,7 +1596,7 @@ public:
          ImGui::Text("Last SR Frame     : %llu",
             static_cast<unsigned long long>(game_device_data.debug_sr_last_frame));
 
-         ImGui::Text("Input Resolution  : %ux%u",
+         ImGui::Text("Render Resolution : %ux%u",
             game_device_data.debug_sr_last_render_resolution.x,
             game_device_data.debug_sr_last_render_resolution.y);
 
@@ -1580,15 +1633,14 @@ public:
       }
 
       ImGui::TextWrapped(
-         "※ 위 상태는 Luma에서 확인할 수 있는 SR 선택 상태와 실제 Draw 호출 결과를 기준으로 표시합니다. "
-         "이 UI가 NVIDIA Tensor Core의 물리적인 실행 여부를 별도로 측정하는 것은 아닙니다.");
+         "위 상태는 Luma에서 확인할 수 있는 DLSS 선택 상태와 실제 SR 처리 결과를 기준으로 표시합니다.");
 
       ImGui::Spacing();
       ImGui::Separator();
       ImGui::Spacing();
 
       // ------------------------------------------------------------------
-      // 4. HDR 세부 확인
+      // 5. HDR 세부 확인
       // ------------------------------------------------------------------
       ImGui::TextColored(ImVec4(1.0f, 0.60f, 0.20f, 1.0f), "HDR OUTPUT PATH");
       ImGui::Separator();
@@ -1611,6 +1663,9 @@ public:
          display_composition_disabled ? ImVec4(0.20f, 1.0f, 0.35f, 1.0f) : ImVec4(1.0f, 0.25f, 0.25f, 1.0f),
          "%s", display_composition_disabled ? "DISABLED / BYPASS" : "ENABLED");
 
+      ImGui::TextWrapped("R16G16B16A16_FLOAT: 넓은 밝기 범위의 화면 정보를 처리할 수 있는 출력 형식입니다.");
+      ImGui::TextWrapped("scRGB: 일반 SDR보다 넓은 밝기 범위의 값을 전달할 수 있는 색 공간입니다.");
+
       ImGui::Text("HDR Output Status : ");
       ImGui::SameLine();
       ImGui::TextColored(
@@ -1618,7 +1673,7 @@ public:
          "%s", hdr_output_path_configured ? "CONFIGURED / ACTIVE" : "INCOMPLETE");
 
       // ------------------------------------------------------------------
-      // 5. 자세한 설명 - 아래로 모아 설정 영역을 방해하지 않음
+      // 6. 자세한 설명 - 아래로 모아 설정 영역을 방해하지 않음
       // ------------------------------------------------------------------
       ImGui::Spacing();
       ImGui::Separator();
@@ -1629,36 +1684,29 @@ public:
       ImGui::TextColored(ImVec4(0.35f, 0.75f, 1.0f, 1.0f), "DLSS / SUPER RESOLUTION");
       ImGui::TextWrapped(
          "현재 표시하는 DLSS는 Frame Generation이 아니라 Super Resolution 경로입니다. "
-         "게임의 렌더링 화면을 더 높은 출력 해상도로 재구성하는 업스케일링 기능입니다.");
+         "낮은 해상도로 렌더링한 화면을 더 높은 출력 해상도에 맞게 재구성하는 기능입니다.");
       ImGui::TextWrapped(
-         "위의 DLSS ACTIVE 표시는 Luma의 SR 구현체 선택 상태와 실제 최근 SR Draw 성공 여부를 함께 확인하여 판단합니다. "
-         "따라서 단순히 설정 메뉴에서 켜져 있다는 것만 보고 ACTIVE로 표시하지 않습니다.");
+         "DLSS ACTIVE는 Luma의 SR 구현체 선택 상태와 실제 최근 SR 처리 결과를 함께 확인하여 표시합니다.");
 
       ImGui::Spacing();
       ImGui::TextColored(ImVec4(1.0f, 0.60f, 0.20f, 1.0f), "HDR");
       ImGui::TextWrapped(
-         "HDR ACTIVE는 이 코드에서 확인 가능한 HDR 출력 경로를 종합한 상태입니다. "
-         "16비트 실수형 백버퍼, scRGB 색 공간, Luma display composition 우회 설정이 모두 맞아야 활성 상태로 표시합니다.");
-      ImGui::TextWrapped(
-         "중요: 이 상태는 게임 내부의 HDR 출력 경로가 활성화되었다는 의미입니다. "
-         "실제 모니터가 HDR 모드로 전환되었는지 또는 최종 패널이 어떤 신호를 표시하는지까지 이 UI가 직접 측정하는 것은 아닙니다.");
+         "HDR ACTIVE는 이 코드에서 확인 가능한 HDR 출력 경로를 기준으로 표시합니다.");
 
       ImGui::Spacing();
       ImGui::TextColored(ImVec4(0.75f, 0.75f, 1.0f, 1.0f), "R16G16B16A16_FLOAT란?");
       ImGui::TextWrapped(
-         "16비트 실수형 백버퍼입니다. SDR보다 더 넓은 밝기 범위의 값을 정밀하게 저장할 수 있는 출력 형식입니다. "
-         "하지만 이 형식 하나만 바뀐다고 HDR 출력이 자동으로 완성되는 것은 아닙니다.");
+         "16비트 실수형 백버퍼입니다. SDR보다 넓은 밝기 범위의 값을 저장할 수 있는 출력 형식입니다.");
 
       ImGui::TextColored(ImVec4(0.75f, 0.75f, 1.0f, 1.0f), "scRGB란?");
       ImGui::TextWrapped(
-         "scRGB는 일반 SDR보다 넓은 밝기 범위의 값을 다음 출력 단계로 전달할 수 있는 색 공간입니다. "
-         "쉽게 말하면 더 밝은 빛의 정보를 담아 전달하기 위한 통로입니다.");
+         "일반 SDR보다 넓은 밝기 범위의 값을 전달할 수 있는 색 공간입니다.");
 
       ImGui::TextColored(ImVec4(0.75f, 0.75f, 1.0f, 1.0f), "Depth / Motion Vector란?");
       ImGui::TextWrapped(
-         "Depth는 화면 속 물체가 얼마나 가까이 또는 멀리 있는지를 나타내는 깊이 정보입니다. "
-         "Motion Vector는 화면 속 물체가 프레임 사이에서 어느 방향으로 움직였는지를 나타내는 정보입니다. "
-         "DLSS Super Resolution의 시간적 재구성에 필요한 입력으로 사용됩니다.");
+         "Depth는 화면 속 물체가 얼마나 가까이 또는 멀리 있는지를 나타내는 정보입니다.");
+      ImGui::TextWrapped(
+         "Motion Vector는 이전 화면에서 현재 화면으로 물체가 어느 방향으로 움직였는지를 나타내는 정보입니다.");
    }
 
    void PrintImGuiAbout() override
