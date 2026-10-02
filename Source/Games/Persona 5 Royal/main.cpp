@@ -1481,7 +1481,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
       // 2) DXGI 색공간을 순수 선형 scRGB로 지정
       swapchain_upgrade_type = SwapchainUpgradeType::scRGB;
 
-      // 3) 루마의 엉성한 자체 톤매퍼는 끄고 우리 KAKA 셰이더에게 넘김
+      // 3) 루마의 엉성한 자체 톤매퍼는 끄고 우리 KAKA 셰이더에게 넘김 
       force_disable_display_composition = true;
 
       game = new Persona5Royal();
