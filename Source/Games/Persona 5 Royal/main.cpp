@@ -2,6 +2,10 @@
 
 #define ALLOW_SHADERS_DUMPING 0
 
+#ifndef PROJECT_NAME
+#define PROJECT_NAME "Luma KAKA HDR"
+#endif
+
 #include "..\..\Core\core.hpp"
 #define XXH_STATIC_LINKING_ONLY
 #define XXH_IMPLEMENTATION
@@ -1063,6 +1067,14 @@ public:
 
       device_data.has_drawn_sr = false;
       device_data.has_drawn_main_post_processing = false;
+
+      // SR이 꺼지거나 억제된 경우 이전 프레임의 SUCCESS를 다음 실행에 남기지 않습니다.
+      // 렌더링 경로에는 영향을 주지 않고 Debug UI용 telemetry만 초기화합니다.
+      if (!SrActive(device_data))
+      {
+         game_device_data.debug_sr_last_attempted = false;
+         game_device_data.debug_sr_last_success = false;
+      }
    }
 
    static void OnExecuteSecondaryCommandList(reshade::api::command_list* cmd_list, reshade::api::command_list* secondary_cmd_list)
@@ -1345,146 +1357,24 @@ public:
       reshade::api::effect_runtime* runtime = nullptr;
       auto& game_device_data = GetGameDeviceData(device_data);
 
-      // ------------------------------------------------------------------
-      // Debug / telemetry
-      // ------------------------------------------------------------------
-      // This panel only reads state. It does not change any D3D11 render
-      // target, shader, viewport, scissor, SRV, UAV, or SR resource.
-      ImGui::Spacing();
-      ImGui::Text("DLSS / SR DEBUG");
-      ImGui::Separator();
-
-      const bool sr_selected = device_data.sr_type != SR::Type::None;
-      const bool sr_last_attempted = game_device_data.debug_sr_last_attempted;
-      const bool sr_last_success = game_device_data.debug_sr_last_success;
-
-      ImGui::Text("SR Implementation : %s", sr_selected ? "Enabled" : "Disabled");
-      ImGui::TextWrapped(
-         "SR Implementation은 Luma에서 선택한 업스케일링 기능이 활성화되어 있는지를 보여줍니다. "
-         "이 값만으로 특정 NVIDIA 하드웨어가 실제로 동작하는지를 의미하지는 않습니다.");
-
-      if (!sr_selected)
-      {
-         ImGui::Text("SR Status         : OFF");
-         ImGui::TextWrapped(
-            "현재 Luma의 Super Resolution 호출 대상이 선택되어 있지 않습니다.");
-      }
-      else if (sr_last_attempted)
-      {
-         ImGui::Text("Last SR Draw      : %s", sr_last_success ? "SUCCESS" : "FAILED");
-         ImGui::TextWrapped(
-            sr_last_success
-               ? "가장 최근 프레임에서 Luma가 SR 구현체의 Draw 호출을 실행했고 성공(true)을 반환했습니다."
-               : "가장 최근 프레임에서 Luma가 SR 구현체의 Draw 호출을 실행했지만 실패(false)를 반환했습니다.");
-         ImGui::TextWrapped(
-            "※ 이것은 Luma의 SR 호출 결과입니다. 이 코드만으로 NVIDIA Tensor Core의 물리적인 실행 여부까지 직접 측정하는 것은 아닙니다.");
-      }
-      else
-      {
-         ImGui::Text("Last SR Draw      : WAITING");
-         ImGui::TextWrapped(
-            "아직 이 실행에서 SR Draw 결과가 기록되지 않았습니다.");
-      }
-
-      if (sr_last_attempted)
-      {
-         ImGui::Text("Last SR Frame     : %llu",
-            static_cast<unsigned long long>(game_device_data.debug_sr_last_frame));
-
-         ImGui::Text("Input Resolution  : %ux%u",
-            game_device_data.debug_sr_last_render_resolution.x,
-            game_device_data.debug_sr_last_render_resolution.y);
-         ImGui::TextWrapped(
-            "게임의 원래 렌더링 해상도입니다. 이 해상도의 화면 정보가 SR 입력으로 사용됩니다.");
-
-         ImGui::Text("Output Resolution : %ux%u",
-            game_device_data.debug_sr_last_output_resolution.x,
-            game_device_data.debug_sr_last_output_resolution.y);
-         ImGui::TextWrapped(
-            "SR 처리 후 목표 해상도입니다. 입력보다 높다면 업스케일링이고, 같다면 네이티브 해상도에서의 재구성 경로입니다.");
-
-         ImGui::Text("Depth             : %s",
-            game_device_data.debug_sr_last_depth_available ? "AVAILABLE" : "MISSING");
-         ImGui::TextWrapped(
-            game_device_data.debug_sr_last_depth_available
-               ? "SR 호출 직전에 Depth 리소스가 확보되어 있었습니다. 깊이 정보를 이용할 수 있는 상태입니다."
-               : "SR 호출 직전에 Depth 리소스를 확보하지 못했습니다.");
-
-         ImGui::Text("Motion Vector     : %s",
-            game_device_data.debug_sr_last_motion_vectors_available ? "AVAILABLE" : "MISSING");
-         ImGui::TextWrapped(
-            game_device_data.debug_sr_last_motion_vectors_available
-               ? "SR 호출 직전에 Motion Vector 리소스가 확보되어 있었습니다. 움직임 정보를 이용할 수 있는 상태입니다."
-               : "SR 호출 직전에 Motion Vector 리소스를 확보하지 못했습니다.");
-      }
+      // ==================================================================
+      // Persona 5 Royal - KAKA HDR / Debug UI
+      //
+      // UI 원칙:
+      // 1. 사용자가 실제로 조작하는 설정을 가장 위에 둡니다.
+      // 2. 그 아래에서 DLSS Super Resolution / HDR의 종합 상태를 먼저 보여줍니다.
+      // 3. 종합 상태 아래에 실제 확인 근거를 보여줍니다.
+      // 4. 긴 설명은 마지막 도움말 영역으로 모아 설정 항목을 아래로 밀어내지 않습니다.
+      //
+      // 이 함수는 표시용 상태만 읽습니다.
+      // DLSS/HDR 렌더링 경로, 셰이더, RTV/UAV/SRV, viewport 등의 상태를 변경하지 않습니다.
+      // ==================================================================
 
       // ------------------------------------------------------------------
-      // HDR output-path status
+      // 1. 기존 Persona 5 Royal 그래픽 설정
+      //    ReShade/Luma에서 제공되는 DLSS / DLSS Preset 바로 아래에 위치하도록
+      //    이 파일에서는 Shadow Map Size Override를 가장 먼저 그립니다.
       // ------------------------------------------------------------------
-      ImGui::Spacing();
-      ImGui::Separator();
-      ImGui::Spacing();
-      ImGui::Text("HDR OUTPUT PATH");
-      ImGui::Separator();
-
-      const bool format_upgrade_configured =
-         swapchain_format_upgrade_type == TextureFormatUpgradesType::AllowedEnabled;
-      const bool scrgb_configured =
-         swapchain_upgrade_type == SwapchainUpgradeType::scRGB;
-      const bool display_composition_disabled = force_disable_display_composition;
-      const bool hdr_output_path_configured =
-         format_upgrade_configured && scrgb_configured && display_composition_disabled;
-
-      ImGui::Text("Swapchain Format : %s",
-         format_upgrade_configured ? "R16G16B16A16_FLOAT" : "Not configured");
-      ImGui::TextWrapped(
-         format_upgrade_configured
-            ? "16비트 실수형 백버퍼입니다. SDR보다 더 넓은 밝기 정보를 저장할 수 있는 정밀한 출력 형식입니다. "
-              "단, 이 형식만 적용됐다고 해서 HDR 출력이 자동으로 완성되는 것은 아닙니다."
-            : "16비트 실수형 백버퍼 승격 설정이 활성화되어 있지 않습니다.");
-
-      ImGui::Text("Color Space      : %s",
-         scrgb_configured ? "scRGB" : "Not configured");
-      ImGui::TextWrapped(
-         scrgb_configured
-            ? "scRGB는 넓은 밝기 범위의 값을 다음 출력 단계로 전달할 수 있는 색 공간입니다. "
-              "쉽게 말하면 일반 SDR보다 더 밝은 빛의 정보를 담아 전달하기 위한 통로입니다. "
-              "하지만 scRGB라는 이름만으로 최종 모니터가 HDR 모드라는 뜻은 아닙니다."
-            : "scRGB 출력 색 공간이 이 모드에서 설정되어 있지 않습니다.");
-
-      ImGui::Text("Display Composition: %s",
-         display_composition_disabled ? "DISABLED" : "ENABLED");
-      ImGui::TextWrapped(
-         display_composition_disabled
-            ? "Luma의 기존 display composition 처리를 끄고 사용자님의 별도 HDR 셰이더 경로로 최종 처리를 넘기도록 구성되어 있습니다."
-            : "Luma의 display composition 처리가 활성화되어 있습니다.");
-
-      ImGui::Spacing();
-      if (hdr_output_path_configured)
-      {
-         ImGui::Text("HDR Output Status : CONFIGURED");
-         ImGui::TextWrapped(
-            "현재 코드에서 확인할 수 있는 HDR 출력 경로 구성은 정상입니다: "
-            "16비트 실수형 백버퍼 + scRGB 색 공간 + Luma display composition 비활성화가 모두 설정되어 있습니다.");
-         ImGui::TextWrapped(
-            "중요: 이것은 'HDR 출력 경로가 올바르게 구성됨'을 의미합니다. "
-            "이 코드만으로 실제 모니터가 HDR 모드로 전환되었는지, 또는 모니터가 최종 HDR 신호를 어떻게 표시하는지까지는 판정할 수 없습니다.");
-      }
-      else
-      {
-         ImGui::Text("HDR Output Status : INCOMPLETE");
-         ImGui::TextWrapped(
-            "HDR 출력 경로에 필요한 설정 중 일부가 적용되지 않았습니다. "
-            "백버퍼 형식, scRGB 색 공간, display composition 상태를 확인하십시오.");
-      }
-
-      // ------------------------------------------------------------------
-      // Existing Persona 5 Royal graphics settings
-      // ------------------------------------------------------------------
-      ImGui::Spacing();
-      ImGui::Separator();
-      ImGui::Spacing();
-
       const char* previewString;
       char buffer[32];
       if (g_shadow_map_size_override == 512)
@@ -1519,7 +1409,7 @@ public:
 
       if (ImGui::BeginCombo("Shadow map size override", previewString))
       {
-         auto AddComboItem = [&](const char* name, uint32_t size, bool enabled)
+         auto AddComboItem = [&](const char* name, uint32_t size)
          {
             const bool selected = g_shadow_map_size_override == size;
             if (ImGui::Selectable(name, selected))
@@ -1533,49 +1423,266 @@ public:
             }
          };
 
-         AddComboItem("None", 0, true);
-         AddComboItem("Very low - 512", 512, true);
-         AddComboItem("Low - 1024", 1024, true);
-         AddComboItem("Middle - 2048", 2048, true);
-         AddComboItem("High - 4096", 4096, true);
-         AddComboItem("Very high - 8192", 8192, true);
+         AddComboItem("None", 0);
+         AddComboItem("Very low - 512", 512);
+         AddComboItem("Low - 1024", 1024);
+         AddComboItem("Middle - 2048", 2048);
+         AddComboItem("High - 4096", 4096);
+         AddComboItem("Very high - 8192", 8192);
          ImGui::EndCombo();
       }
       if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
       {
-         ImGui::SetTooltip("Set ingame Shadow Quality to Middle (The shadow quality setting is broken and Middle is what ends up being used anyway, but just to make sure). Requires restart/resetting Shadow Quality in settings.");
+         ImGui::SetTooltip(
+            "게임의 Shadow Quality가 장면 전환 후 2048로 돌아가는 문제를 보정합니다. "
+            "변경 후 게임의 Shadow Quality를 다시 적용하거나 재시작해야 할 수 있습니다.");
       }
+
+      ImGui::Spacing();
+      ImGui::Separator();
+      ImGui::Spacing();
+
+      // ------------------------------------------------------------------
+      // 2. 종합 상태 - 일반 사용자가 가장 먼저 확인하는 영역
+      // ------------------------------------------------------------------
+      const bool sr_selected = device_data.sr_type != SR::Type::None;
+      const bool sr_last_attempted = game_device_data.debug_sr_last_attempted;
+      const bool sr_last_success = game_device_data.debug_sr_last_success;
+
+      const bool dlss_active =
+         sr_selected && sr_last_attempted && sr_last_success &&
+         game_device_data.debug_sr_last_depth_available &&
+         game_device_data.debug_sr_last_motion_vectors_available;
+      const bool dlss_failed = sr_selected && sr_last_attempted && !sr_last_success;
+      const bool dlss_waiting = sr_selected && !sr_last_attempted;
+
+      const bool format_upgrade_configured =
+         swapchain_format_upgrade_type == TextureFormatUpgradesType::AllowedEnabled;
+      const bool scrgb_configured =
+         swapchain_upgrade_type == SwapchainUpgradeType::scRGB;
+      const bool display_composition_disabled = force_disable_display_composition;
+      const bool hdr_output_path_configured =
+         format_upgrade_configured && scrgb_configured && display_composition_disabled;
+
+      // ------------------------------------------------------------------
+      // DLSS / SUPER RESOLUTION summary
+      // ------------------------------------------------------------------
+      ImGui::TextColored(ImVec4(0.35f, 0.75f, 1.0f, 1.0f), "DLSS / SUPER RESOLUTION");
+      ImGui::Separator();
+
+      if (dlss_active)
+      {
+         ImGui::TextColored(ImVec4(0.20f, 1.0f, 0.35f, 1.0f), "● DLSS SUPER RESOLUTION ACTIVE");
+         ImGui::TextWrapped(
+            "현재 확인된 Luma의 SR 상태를 종합하면 DLSS Super Resolution이 정상적으로 활성화되어 작동하고 있습니다.");
+      }
+      else if (dlss_failed)
+      {
+         ImGui::TextColored(ImVec4(1.0f, 0.25f, 0.25f, 1.0f), "● DLSS SUPER RESOLUTION ERROR");
+         ImGui::TextWrapped(
+            "DLSS Super Resolution이 선택되어 있지만 가장 최근 SR 처리 호출이 실패했습니다. 아래의 세부 상태를 확인하십시오.");
+      }
+      else if (dlss_waiting)
+      {
+         ImGui::TextColored(ImVec4(1.0f, 0.80f, 0.20f, 1.0f), "● DLSS SUPER RESOLUTION CHECKING");
+         ImGui::TextWrapped(
+            "DLSS Super Resolution은 선택되어 있습니다. 아직 이번 실행에서 SR 처리 결과가 기록되지 않았습니다.");
+      }
+      else
+      {
+         ImGui::TextColored(ImVec4(0.70f, 0.70f, 0.70f, 1.0f), "● DLSS SUPER RESOLUTION OFF");
+         ImGui::TextWrapped(
+            "현재 Luma의 Super Resolution 구현체가 선택되어 있지 않습니다.");
+      }
+
+      ImGui::Spacing();
+
+      // ------------------------------------------------------------------
+      // HDR summary
+      // ------------------------------------------------------------------
+      ImGui::TextColored(ImVec4(1.0f, 0.60f, 0.20f, 1.0f), "HDR OUTPUT");
+      ImGui::Separator();
+
+      if (hdr_output_path_configured)
+      {
+         ImGui::TextColored(ImVec4(0.20f, 1.0f, 0.35f, 1.0f), "● HDR ACTIVE");
+         ImGui::TextWrapped(
+            "현재 코드에서 확인 가능한 HDR 출력 경로가 모두 구성되어 있어 HDR 출력 경로가 활성화된 것으로 판단합니다.");
+      }
+      else
+      {
+         ImGui::TextColored(ImVec4(1.0f, 0.25f, 0.25f, 1.0f), "● HDR OUTPUT INCOMPLETE");
+         ImGui::TextWrapped(
+            "HDR 출력 경로에 필요한 설정 중 일부가 맞지 않습니다. 아래 HDR 세부 항목을 확인하십시오.");
+      }
+
+      ImGui::Spacing();
+      ImGui::Separator();
+      ImGui::Spacing();
+
+      // ------------------------------------------------------------------
+      // 3. DLSS / SR 세부 확인
+      // ------------------------------------------------------------------
+      ImGui::TextColored(ImVec4(0.35f, 0.75f, 1.0f, 1.0f), "DLSS / SR DEBUG");
+      ImGui::Separator();
+
+      ImGui::Text("SR Implementation : ");
+      ImGui::SameLine();
+      ImGui::TextColored(
+         sr_selected ? ImVec4(0.20f, 1.0f, 0.35f, 1.0f) : ImVec4(0.70f, 0.70f, 0.70f, 1.0f),
+         "%s", sr_selected ? "ENABLED" : "DISABLED");
+
+      if (sr_last_attempted)
+      {
+         ImGui::Text("Last SR Draw      : ");
+         ImGui::SameLine();
+         ImGui::TextColored(
+            sr_last_success ? ImVec4(0.20f, 1.0f, 0.35f, 1.0f) : ImVec4(1.0f, 0.25f, 0.25f, 1.0f),
+            "%s", sr_last_success ? "SUCCESS" : "FAILED");
+
+         ImGui::Text("Last SR Frame     : %llu",
+            static_cast<unsigned long long>(game_device_data.debug_sr_last_frame));
+
+         ImGui::Text("Input Resolution  : %ux%u",
+            game_device_data.debug_sr_last_render_resolution.x,
+            game_device_data.debug_sr_last_render_resolution.y);
+
+         ImGui::Text("Output Resolution : %ux%u",
+            game_device_data.debug_sr_last_output_resolution.x,
+            game_device_data.debug_sr_last_output_resolution.y);
+
+         const bool upscaling =
+            game_device_data.debug_sr_last_output_resolution.x > game_device_data.debug_sr_last_render_resolution.x &&
+            game_device_data.debug_sr_last_output_resolution.y > game_device_data.debug_sr_last_render_resolution.y;
+
+         ImGui::Text("SR Mode           : ");
+         ImGui::SameLine();
+         ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f),
+            "%s", upscaling ? "SUPER RESOLUTION / UPSCALING" : "NATIVE-RESOLUTION SR PATH");
+
+         ImGui::Text("Depth             : ");
+         ImGui::SameLine();
+         ImGui::TextColored(
+            game_device_data.debug_sr_last_depth_available ? ImVec4(0.20f, 1.0f, 0.35f, 1.0f) : ImVec4(1.0f, 0.25f, 0.25f, 1.0f),
+            "%s", game_device_data.debug_sr_last_depth_available ? "AVAILABLE" : "MISSING");
+
+         ImGui::Text("Motion Vector     : ");
+         ImGui::SameLine();
+         ImGui::TextColored(
+            game_device_data.debug_sr_last_motion_vectors_available ? ImVec4(0.20f, 1.0f, 0.35f, 1.0f) : ImVec4(1.0f, 0.25f, 0.25f, 1.0f),
+            "%s", game_device_data.debug_sr_last_motion_vectors_available ? "AVAILABLE" : "MISSING");
+      }
+      else
+      {
+         ImGui::Text("Last SR Draw      : ");
+         ImGui::SameLine();
+         ImGui::TextColored(ImVec4(1.0f, 0.80f, 0.20f, 1.0f), "WAITING");
+      }
+
+      ImGui::TextWrapped(
+         "※ 위 상태는 Luma에서 확인할 수 있는 SR 선택 상태와 실제 Draw 호출 결과를 기준으로 표시합니다. "
+         "이 UI가 NVIDIA Tensor Core의 물리적인 실행 여부를 별도로 측정하는 것은 아닙니다.");
+
+      ImGui::Spacing();
+      ImGui::Separator();
+      ImGui::Spacing();
+
+      // ------------------------------------------------------------------
+      // 4. HDR 세부 확인
+      // ------------------------------------------------------------------
+      ImGui::TextColored(ImVec4(1.0f, 0.60f, 0.20f, 1.0f), "HDR OUTPUT PATH");
+      ImGui::Separator();
+
+      ImGui::Text("Swapchain Format : ");
+      ImGui::SameLine();
+      ImGui::TextColored(
+         format_upgrade_configured ? ImVec4(0.20f, 1.0f, 0.35f, 1.0f) : ImVec4(1.0f, 0.25f, 0.25f, 1.0f),
+         "%s", format_upgrade_configured ? "R16G16B16A16_FLOAT" : "NOT CONFIGURED");
+
+      ImGui::Text("Color Space      : ");
+      ImGui::SameLine();
+      ImGui::TextColored(
+         scrgb_configured ? ImVec4(0.20f, 1.0f, 0.35f, 1.0f) : ImVec4(1.0f, 0.25f, 0.25f, 1.0f),
+         "%s", scrgb_configured ? "scRGB" : "NOT CONFIGURED");
+
+      ImGui::Text("Display Composition: ");
+      ImGui::SameLine();
+      ImGui::TextColored(
+         display_composition_disabled ? ImVec4(0.20f, 1.0f, 0.35f, 1.0f) : ImVec4(1.0f, 0.25f, 0.25f, 1.0f),
+         "%s", display_composition_disabled ? "DISABLED / BYPASS" : "ENABLED");
+
+      ImGui::Text("HDR Output Status : ");
+      ImGui::SameLine();
+      ImGui::TextColored(
+         hdr_output_path_configured ? ImVec4(0.20f, 1.0f, 0.35f, 1.0f) : ImVec4(1.0f, 0.25f, 0.25f, 1.0f),
+         "%s", hdr_output_path_configured ? "CONFIGURED / ACTIVE" : "INCOMPLETE");
+
+      // ------------------------------------------------------------------
+      // 5. 자세한 설명 - 아래로 모아 설정 영역을 방해하지 않음
+      // ------------------------------------------------------------------
+      ImGui::Spacing();
+      ImGui::Separator();
+      ImGui::Spacing();
+      ImGui::TextColored(ImVec4(0.80f, 0.80f, 0.80f, 1.0f), "DEBUG INFORMATION / 도움말");
+      ImGui::Separator();
+
+      ImGui::TextColored(ImVec4(0.35f, 0.75f, 1.0f, 1.0f), "DLSS / SUPER RESOLUTION");
+      ImGui::TextWrapped(
+         "현재 표시하는 DLSS는 Frame Generation이 아니라 Super Resolution 경로입니다. "
+         "게임의 렌더링 화면을 더 높은 출력 해상도로 재구성하는 업스케일링 기능입니다.");
+      ImGui::TextWrapped(
+         "위의 DLSS ACTIVE 표시는 Luma의 SR 구현체 선택 상태와 실제 최근 SR Draw 성공 여부를 함께 확인하여 판단합니다. "
+         "따라서 단순히 설정 메뉴에서 켜져 있다는 것만 보고 ACTIVE로 표시하지 않습니다.");
+
+      ImGui::Spacing();
+      ImGui::TextColored(ImVec4(1.0f, 0.60f, 0.20f, 1.0f), "HDR");
+      ImGui::TextWrapped(
+         "HDR ACTIVE는 이 코드에서 확인 가능한 HDR 출력 경로를 종합한 상태입니다. "
+         "16비트 실수형 백버퍼, scRGB 색 공간, Luma display composition 우회 설정이 모두 맞아야 활성 상태로 표시합니다.");
+      ImGui::TextWrapped(
+         "중요: 이 상태는 게임 내부의 HDR 출력 경로가 활성화되었다는 의미입니다. "
+         "실제 모니터가 HDR 모드로 전환되었는지 또는 최종 패널이 어떤 신호를 표시하는지까지 이 UI가 직접 측정하는 것은 아닙니다.");
+
+      ImGui::Spacing();
+      ImGui::TextColored(ImVec4(0.75f, 0.75f, 1.0f, 1.0f), "R16G16B16A16_FLOAT란?");
+      ImGui::TextWrapped(
+         "16비트 실수형 백버퍼입니다. SDR보다 더 넓은 밝기 범위의 값을 정밀하게 저장할 수 있는 출력 형식입니다. "
+         "하지만 이 형식 하나만 바뀐다고 HDR 출력이 자동으로 완성되는 것은 아닙니다.");
+
+      ImGui::TextColored(ImVec4(0.75f, 0.75f, 1.0f, 1.0f), "scRGB란?");
+      ImGui::TextWrapped(
+         "scRGB는 일반 SDR보다 넓은 밝기 범위의 값을 다음 출력 단계로 전달할 수 있는 색 공간입니다. "
+         "쉽게 말하면 더 밝은 빛의 정보를 담아 전달하기 위한 통로입니다.");
+
+      ImGui::TextColored(ImVec4(0.75f, 0.75f, 1.0f, 1.0f), "Depth / Motion Vector란?");
+      ImGui::TextWrapped(
+         "Depth는 화면 속 물체가 얼마나 가까이 또는 멀리 있는지를 나타내는 깊이 정보입니다. "
+         "Motion Vector는 화면 속 물체가 프레임 사이에서 어느 방향으로 움직였는지를 나타내는 정보입니다. "
+         "DLSS Super Resolution의 시간적 재구성에 필요한 입력으로 사용됩니다.");
    }
 
    void PrintImGuiAbout() override
    {
-      ImGui::Text("Persona 5 Royal Luma mod - about and credits section", "");
-      ImGui::Text("xxHash Library\n"
-                  "Copyright (c) 2012-2021 Yann Collet\n"
-                  "All rights reserved.\n"
-                  "\n"
-                  "BSD 2-Clause License (https://www.opensource.org/licenses/bsd-license.php)\n"
-                  "\n"
-                  "Redistribution and use in source and binary forms, with or without modification,\n"
-                  "are permitted provided that the following conditions are met:\n"
-                  "\n"
-                  "* Redistributions of source code must retain the above copyright notice, this\n"
-                  "  list of conditions and the following disclaimer.\n"
-                  "\n"
-                  "* Redistributions in binary form must reproduce the above copyright notice, this\n"
-                  "  list of conditions and the following disclaimer in the documentation and/or\n"
-                  "  other materials provided with the distribution.\n"
-                  "\n"
-                  "THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS \"AS IS\" AND\n"
-                  "ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED\n"
-                  "WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE\n"
-                  "DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR\n"
-                  "ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES\n"
-                  "(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;\n"
-                  "LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON\n"
-                  "ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT\n"
-                  "(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS\n"
-                  "SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.\n");
+      ImGui::TextColored(ImVec4(0.35f, 0.75f, 1.0f, 1.0f), "Persona 5 Royal - Luma KAKA HDR Edition");
+      ImGui::Spacing();
+      ImGui::TextWrapped(
+         "Luma Framework를 기반으로 KAKA가 Persona 5 Royal의 HDR 출력 경로와 "
+         "DLSS Super Resolution Debug 기능을 추가하고 사용자 환경에 맞게 개선한 개인 개선판입니다.");
+
+      ImGui::Spacing();
+      ImGui::TextColored(ImVec4(0.20f, 1.0f, 0.35f, 1.0f), "주요 기능");
+      ImGui::BulletText("HDR 출력 경로 지원");
+      ImGui::BulletText("scRGB 출력 경로");
+      ImGui::BulletText("DLSS / Super Resolution 상태 확인");
+      ImGui::BulletText("HDR 출력 경로 상태 확인");
+      ImGui::BulletText("Persona 5 Royal 그래픽 설정 개선");
+
+      ImGui::Spacing();
+      ImGui::TextColored(ImVec4(0.80f, 0.80f, 0.80f, 1.0f), "Credits");
+      ImGui::TextWrapped(
+         "이 프로젝트는 Luma Framework를 기반으로 제작되었습니다. "
+         "원본 프로젝트와 포함된 외부 라이브러리의 저작권 및 라이선스 고지는 "
+         "배포본의 소스/라이선스 파일을 확인하십시오.");
    }
 };
 
@@ -1583,7 +1690,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 {
    if (ul_reason_for_call == DLL_PROCESS_ATTACH)
    {
-      Globals::SetGlobals(PROJECT_NAME, "Persona 5 Royal Luma mod");
+      Globals::SetGlobals(PROJECT_NAME, "Luma KAKA HDR - Persona 5 Royal");
       Globals::DEVELOPMENT_STATE = Globals::ModDevelopmentState::Finished;
       Globals::VERSION = 1;
 
