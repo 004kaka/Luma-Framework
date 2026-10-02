@@ -1433,9 +1433,15 @@ public:
       }
       if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
       {
-         ImGui::SetTooltip(
-            "게임의 Shadow Quality가 장면 전환 후 2048로 돌아가는 문제를 보정합니다. "
-            "변경 후 게임의 Shadow Quality를 다시 적용하거나 재시작해야 할 수 있습니다.");
+         ImGui::SetNextWindowSizeConstraints(ImVec2(0.0f, 0.0f), ImVec2(280.0f, FLT_MAX));
+         ImGui::BeginTooltip();
+         ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 260.0f);
+         ImGui::TextUnformatted(
+            "게임의 Shadow Quality가 장면 전환 후 2048로 돌아가는 문제를 보정합니다.\n\n"
+            "변경 후 게임의 Shadow Quality를 다시 적용하거나\n"
+            "재시작해야 할 수 있습니다.");
+         ImGui::PopTextWrapPos();
+         ImGui::EndTooltip();
       }
 
       ImGui::Spacing();
@@ -1495,6 +1501,8 @@ public:
             "현재 DLSS Super Resolution이 선택되어 있지 않습니다.");
       }
 
+      ImGui::Spacing();
+      ImGui::Separator();
       ImGui::Spacing();
 
       // ------------------------------------------------------------------
@@ -1681,9 +1689,12 @@ public:
       ImGui::TextColored(ImVec4(0.80f, 0.80f, 0.80f, 1.0f), "DEBUG INFORMATION / 도움말");
       ImGui::Separator();
 
+      ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 560.0f);
+
       ImGui::TextColored(ImVec4(0.35f, 0.75f, 1.0f, 1.0f), "DLSS / SUPER RESOLUTION");
       ImGui::TextWrapped(
-         "현재 표시하는 DLSS는 Frame Generation이 아니라 Super Resolution 경로입니다. "
+         "현재 표시하는 DLSS는 Frame Generation이 아니라 Super Resolution 경로입니다.");
+      ImGui::TextWrapped(
          "낮은 해상도로 렌더링한 화면을 더 높은 출력 해상도에 맞게 재구성하는 기능입니다.");
       ImGui::TextWrapped(
          "DLSS ACTIVE는 Luma의 SR 구현체 선택 상태와 실제 최근 SR 처리 결과를 함께 확인하여 표시합니다.");
@@ -1707,11 +1718,16 @@ public:
          "Depth는 화면 속 물체가 얼마나 가까이 또는 멀리 있는지를 나타내는 정보입니다.");
       ImGui::TextWrapped(
          "Motion Vector는 이전 화면에서 현재 화면으로 물체가 어느 방향으로 움직였는지를 나타내는 정보입니다.");
+
+      ImGui::PopTextWrapPos();
    }
 
    void PrintImGuiAbout() override
    {
       ImGui::TextColored(ImVec4(0.35f, 0.75f, 1.0f, 1.0f), "Persona 5 Royal - Luma KAKA HDR Edition");
+      ImGui::Spacing();
+      ImGui::TextColored(ImVec4(0.20f, 1.0f, 0.35f, 1.0f), "Version 2");
+      ImGui::TextWrapped("Change Log: UI 개선 — 2026년 10월 3일 04시 13분 수정 및 저장");
       ImGui::Spacing();
       ImGui::TextWrapped(
          "Luma Framework를 기반으로 KAKA가 Persona 5 Royal의 HDR 출력 경로와 "
