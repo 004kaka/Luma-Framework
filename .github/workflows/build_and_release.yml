@@ -1,4 +1,4 @@
-name: Build Persona 5 Luma
+name: Build Persona 5 Royal Luma
 
 on:
   push:
@@ -18,17 +18,16 @@ jobs:
     - name: Add MSBuild to PATH
       uses: microsoft/setup-msbuild@v2
 
-    - name: Build Persona 5 x64 Release
+    - name: Build Persona 5 Royal x64 Release
       run: |
-        msbuild Luma.sln /p:Configuration="Publishing-Release" /p:Platform="x64" /p:DefineConstants="REMOTE_BUILD=1"
+        msbuild "Source/Games/Persona 5 Royal/Persona 5 Royal.vcxproj" /p:Configuration="Publishing-Release" /p:Platform="x64" /p:DefineConstants="REMOTE_BUILD=1"
 
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: Luma-Persona_5
+        name: Luma-Persona_5_Royal
         path: |
-          bin/x64/Publishing-Release/Persona 5.addon64
-          bin/x64/Publishing-Release/Persona 5/
+          bin/x64/Publishing-Release/
           Output/
           **/*.addon64
         if-no-files-found: warn
