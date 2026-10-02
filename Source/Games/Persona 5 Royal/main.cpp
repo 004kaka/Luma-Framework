@@ -8,8 +8,8 @@
 
 static bool KAKA_OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd)
 {
-    // 백버퍼를 강제로 16비트 실수형 scRGB 포맷으로 승격
-    desc.buffer_desc.format = reshade::api::format::r16g16b16a16_float;
+    // ReShade 최신 API 규격: back_buffer 또는 format 직접 지정
+    desc.back_buffer.texture.format = reshade::api::format::r16g16b16a16_float;
     return true; 
 }
 
@@ -23,7 +23,6 @@ static void KAKA_OnInitSwapchain(reshade::api::swapchain* swapchain)
         IDXGISwapChain4* swapchain4 = nullptr;
         if (SUCCEEDED(native_swapchain->QueryInterface(IID_PPV_ARGS(&swapchain4))))
         {
-            // DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709 = 순수 scRGB 선형 색공간 지정
             swapchain4->SetColorSpace1(DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709);
             swapchain4->Release();
         }
@@ -1494,9 +1493,25 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
    }
    else if (ul_reason_for_call == DLL_PROCESS_DETACH)
    {
-      // KAKA scRGB 스왑체인 이벤트 등록
-        reshade::register_event<reshade::addon_event::create_swapchain>(KAKA_OnCreateSwapchain);
-        reshade::register_event<reshade::addon_event::init_swapchain>(KAKA_OnInitSwapchain);
+     // KAKA scRGB 스왑체인 이벤트 등록
+        reshade::register_event<reshade::addon_event::create_swapchain>(
+            [](reshade::api::swapchain_desc& desc, void* hwnd) -> bool {
+                desc.back_buffer.texture.format = reshade::api::format::r16g16b16a16_float;
+                return true;
+            });
+
+        reshade::register_event<reshade::addon_event::init_swapchain>(
+            [](reshade::api::swapchain* swapchain) {
+                if (!swapchain) return;
+                IDXGISwapChain* native_sc = reinterpret_cast<IDXGISwapChain*>(swapchain->get_native());
+                if (native_sc) {
+                    IDXGISwapChain4* sc4 = nullptr;
+                    if (SUCCEEDED(native_sc->QueryInterface(IID_PPV_ARGS(&sc4)))) {
+                        sc4->SetColorSpace1(DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709);
+                        sc4->Release();
+                    }
+                }
+            });
       
       reshade::unregister_event<reshade::addon_event::execute_secondary_command_list>(Persona5Royal::OnExecuteSecondaryCommandList);
       reshade::unregister_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(Persona5Royal::OnBindRenderTargetsAndDepthStencil);
