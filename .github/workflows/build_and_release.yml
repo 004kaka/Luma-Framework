@@ -20,7 +20,7 @@ jobs:
 
       - name: Build Persona 5 Royal x64 Release
         run: |
-          msbuild "Source/Games/Persona 5 Royal/Persona 5 Royal.vcxproj" /p:Configuration="Publishing-Release" /p:Platform="x64" /p:DefineConstants="REMOTE_BUILD=1"
+          msbuild "Source/Games/Persona 5 Royal/Persona 5 Royal.vcxproj" /p:Configuration="Publishing-Release" /p:Platform="x64" /p:TargetName="LUMA-Persona5_Royal-KAKA_HDR_Edition" /p:TargetExt=".addon64" /p:DefineConstants="REMOTE_BUILD=1"
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
