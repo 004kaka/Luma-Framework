@@ -2,7 +2,7 @@
 
 #define ALLOW_SHADERS_DUMPING 0
 
-// [LUMA-Persona5_Royal-KAKA_HDR_Edition] 언더바 안전 규격 매크로 정의
+// [LUMA-Persona5_Royal-KAKA_HDR_Edition] 안전 규격 선언
 #define PROJECT_NAME "LUMA-P5R-KAKA_HDR"
 
 #include "..\..\Core\core.hpp"
@@ -13,7 +13,7 @@
 enum class FramePhase
 {
    SHADOW_MAP,
-   REFLECTION, // planar reflections are rarely used, one place is in Madarames Palace just outside the central garden save room
+   REFLECTION, 
    GBUFFER,
    LIGHTING,
    DEFERRED,
@@ -60,7 +60,7 @@ namespace
 
    bool PatchSamplerStates()
    {
-      constexpr size_t stolenLen = 18; // Length of bytes we are overwriting
+      constexpr size_t stolenLen = 18; 
 
       const HMODULE hModule = GetModuleHandleA(nullptr);
       const uintptr_t baseAddr = (uintptr_t)hModule;
@@ -68,10 +68,8 @@ namespace
       auto dosHeader = (PIMAGE_DOS_HEADER)baseAddr;
       auto ntHeaders = (PIMAGE_NT_HEADERS)baseAddr + dosHeader->e_lfanew;
 
-      // only search in the first 25 MB that's where all the code is thanks to Denuvo the exe is unnecessarily large
       std::size_t sectionSize = min(ntHeaders->OptionalHeader.SizeOfImage, 25U * 1024U * 1024U);
 
-      // movss xmm2, [rcx+2CCh], jnz 5, mov xmm2, ... only occurs where we need it in every version released on steam so far
       std::vector<std::byte> pattern = {std::byte{0xf3}, std::byte{0x0f}, std::byte{0x10}, std::byte{0x91},
          std::byte{0xcc}, std::byte{0x02}, std::byte{0x00}, std::byte{0x00},
          std::byte{0x75}, std::byte{0x0a}, std::byte{0xf3}, std::byte{0x0f},
@@ -97,26 +95,24 @@ namespace
       memcpy(&returnOffset, (void*)(patchAddr + 19), sizeof(returnOffset));
       uintptr_t returnAddr = patchAddr + 20 + returnOffset;
 
-      // when the resolution dependent mip bias is zero we add FLT_MIN so we can detect it and not
-      // upgrade the sampler state
       std::vector<uint8_t> shellcode = {
-         0xf3, 0x0f, 0x10, 0x91, 0xcc, 0x02, 0x00, 0x00,             // movss xmm2, dword ptr [rcx+2CCh]
-         0x75, 0x30,                                                 // jne early out
-         0x48, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // mov rax, [mip bias addr]
-         0xf3, 0x0f, 0x10, 0x10,                                     // movss xmm2, rax
-         0x0f, 0x57, 0xc9,                                           // xorps xmm1, xmm1
-         0x0f, 0x2e, 0xd1,                                           // ucomiss xmm2, xmm1
-         0x75, 0x0D,                                                 // jne return
-         0xb8, 0x00, 0x00, 0x80, 0x00,                               // mov eax, 0x800000
-         0x66, 0x0f, 0x6e, 0xc8,                                     // movd xmm1, eax
-         0xf3, 0x0f, 0x58, 0xd1,                                     // addss xmm2, xmm1
-         0x49, 0xba, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // return: mov r10, [return address 1]
-         0x41, 0xff, 0xe2,                                           // jmp r10
-         0x49, 0xba, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // early out: mov r10, [return address 2]
-         0x41, 0xff, 0xe2                                            // jmp r10
+         0xf3, 0x0f, 0x10, 0x91, 0xcc, 0x02, 0x00, 0x00,             
+         0x75, 0x30,                                                 
+         0x48, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+         0xf3, 0x0f, 0x10, 0x10,                                     
+         0x0f, 0x57, 0xc9,                                           
+         0x0f, 0x2e, 0xd1,                                           
+         0x75, 0x0D,                                                 
+         0xb8, 0x00, 0x00, 0x80, 0x00,                               
+         0x66, 0x0f, 0x6e, 0xc8,                                     
+         0xf3, 0x0f, 0x58, 0xd1,                                     
+         0x49, 0xba, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+         0x41, 0xff, 0xe2,                                           
+         0x49, 0xba, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+         0x41, 0xff, 0xe2                                            
       };
 
-      size_t allocSize = shellcode.size() + 16; // Add 16 for extra safety
+      size_t allocSize = shellcode.size() + 16; 
       jump_memory = (uint8_t*)VirtualAlloc(nullptr, allocSize, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
       if (!jump_memory)
          return false;
@@ -134,12 +130,11 @@ namespace
       BOOL success = VirtualProtect((void*)patchAddr, stolenLen, PAGE_EXECUTE_READWRITE, &oldProtect);
       if (success)
       {
-         // Build jump to shellcode
-         uint8_t jmpToShellcode[13] = {0x49, 0xba, 0, 0, 0, 0, 0, 0, 0, 0, 0x41, 0xff, 0xe2}; // mov r10, [addr]; jmp r10
+         uint8_t jmpToShellcode[13] = {0x49, 0xba, 0, 0, 0, 0, 0, 0, 0, 0, 0x41, 0xff, 0xe2}; 
          memcpy(&jmpToShellcode[2], &codeAddr, sizeof(void*));
 
-         memset((void*)patchAddr, 0x90, stolenLen);    // NOP original bytes
-         memcpy((void*)patchAddr, jmpToShellcode, 13); // Write the jump
+         memset((void*)patchAddr, 0x90, stolenLen);    
+         memcpy((void*)patchAddr, jmpToShellcode, 13); 
 
          VirtualProtect((void*)patchAddr, stolenLen, oldProtect, &oldProtect);
 
@@ -153,27 +148,22 @@ namespace
 
       return false;
    }
-} // namespace
+} 
 
 struct GameDeviceDataPersona5Royal final : public GameDeviceData
 {
 #if ENABLE_SR
-   // SR
    std::atomic<bool> has_drawn_upscaling = false;
 
-   // resources used to identify the deferred context used for scene drawing
    ComPtr<ID3D11CommandList> remainder_command_list;
    std::atomic<ID3D11DeviceContext*> draw_device_context = nullptr;
 
-   // textures we got from the game
    ComPtr<ID3D11Texture2D> source_color;
    ComPtr<ID3D11Resource> depth_texture;
    ComPtr<ID3D11Texture2D> motion_vectors;
 
-   // the command list we split to interject dlss
    ComPtr<ID3D11CommandList> partial_command_list;
 
-   // resources used to apply sr
    ComPtr<ID3D11Texture2D> decoded_motion_vectors;
    ComPtr<ID3D11UnorderedAccessView> decoded_motion_vectors_uav;
    ComPtr<ID3D11Texture2D> resolve_texture;
@@ -182,12 +172,8 @@ struct GameDeviceDataPersona5Royal final : public GameDeviceData
    ComPtr<ID3D11ShaderResourceView> merged_texture_srv;
    ComPtr<ID3D11RenderTargetView> merged_texture_rtv;
 
-   // pool for replacement textures
    std::vector<ReplacementTexture> replacement_textures;
-   // active replacements for the current frame
    std::unordered_map<ID3D11Resource*, uint32_t> current_replacements;
-   // the game uses this to draw geometry for the UI this is the only resource that gets mapped
-   // after the bloom effect, as constant buffers are updated with UpdateSubresource
    ComPtr<ID3D11Buffer> modifiable_index_vertex_buffer;
    uint2 render_resolution = {};
    uint2 upscale_resolution = {};
@@ -195,12 +181,11 @@ struct GameDeviceDataPersona5Royal final : public GameDeviceData
    uint2 last_viewport_size = {};
    float fov = 0.0f;
 
-   // variables used to fix motion vectors on non-skinned moving objects
    std::unordered_map<uint64_t, float4x4> prev_local_to_view_lookup;
    std::unordered_map<uint64_t, float4x4> local_to_view_lookup;
    std::unordered_map<ID3D11Buffer*, std::array<uint8_t, 7168>> cbuffer_cache;
    std::atomic<ID3D11Buffer*> cb_transform = nullptr;
-#endif // ENABLE_SR
+#endif 
    ComPtr<ID3D11Buffer> scratch_constant_buffer;
    ComPtr<ID3D11UnorderedAccessView> scratch_constant_buffer_uav;
 
@@ -248,7 +233,6 @@ public:
       reshade::api::effect_runtime* runtime = nullptr;
       if (!reshade::get_config_value(runtime, NAME, "ShadowMapSizeOverride", g_shadow_map_size_override))
       {
-         // older versions were saving the setting under the wrong key
          reshade::get_config_value(runtime, NAME, "shadow_map_size_override", g_shadow_map_size_override);
       }
    }
@@ -260,7 +244,6 @@ public:
       game_device_data.target_resolution.x = device_data.output_resolution.x;
       game_device_data.target_resolution.y = device_data.output_resolution.y;
 
-      // unless the ultra wide screen mod is installed output resolution is alway 16:9
       if ((float)game_device_data.target_resolution.x / (float)game_device_data.target_resolution.y < 16.0f / 9.0f)
       {
          game_device_data.target_resolution.y = (game_device_data.target_resolution.x / 16) * 9;
@@ -295,7 +278,6 @@ public:
          native_device->CreateUnorderedAccessView(game_device_data.scratch_constant_buffer.get(), &uavd, game_device_data.scratch_constant_buffer_uav.put());
       }
 
-      // no taa but needed for DLSS indicator in UI
       device_data.taa_detected = true;
    }
 
@@ -365,13 +347,19 @@ public:
                &uav_desc,
                game_device_data.decoded_motion_vectors_uav.put());
          }
+         
+         // [DLSS 블랙스크린 방지 포맷 보정]
+         DXGI_FORMAT sr_format = target_desc.Format;
+         if (sr_format == DXGI_FORMAT_R8G8B8A8_TYPELESS) sr_format = DXGI_FORMAT_R8G8B8A8_UNORM;
+         else if (sr_format == DXGI_FORMAT_R16G16B16A16_TYPELESS) sr_format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+
          {
             D3D11_TEXTURE2D_DESC desc;
             desc.Width = output_width;
             desc.Height = output_height;
             desc.Usage = D3D11_USAGE_DEFAULT;
             desc.ArraySize = 1;
-            desc.Format = target_desc.Format;
+            desc.Format = sr_format;
             desc.SampleDesc.Count = 1;
             desc.SampleDesc.Quality = 0;
             desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
@@ -389,7 +377,7 @@ public:
             desc.Height = output_height;
             desc.Usage = D3D11_USAGE_DEFAULT;
             desc.ArraySize = 1;
-            desc.Format = target_desc.Format;
+            desc.Format = sr_format;
             desc.SampleDesc.Count = 1;
             desc.SampleDesc.Quality = 0;
             desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET | D3D11_BIND_UNORDERED_ACCESS;
@@ -403,17 +391,18 @@ public:
          }
          {
             D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc;
-            srv_desc.Format = target_desc.Format;
+            srv_desc.Format = sr_format;
             srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
             srv_desc.Texture2D.MostDetailedMip = 0;
             srv_desc.Texture2D.MipLevels = 1;
+
             device->CreateShaderResourceView(game_device_data.merged_texture.get(),
                &srv_desc,
                game_device_data.merged_texture_srv.put());
          }
          {
             D3D11_RENDER_TARGET_VIEW_DESC rtv_desc;
-            rtv_desc.Format = target_desc.Format;
+            rtv_desc.Format = sr_format;
             rtv_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
             rtv_desc.Texture2D.MipSlice = 0;
 
@@ -423,7 +412,7 @@ public:
          }
          {
             D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc;
-            uavDesc.Format = target_desc.Format;
+            uavDesc.Format = sr_format;
             uavDesc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
             uavDesc.Texture2D.MipSlice = 0;
 
@@ -474,9 +463,9 @@ public:
       {
          format = DXGI_FORMAT_R8G8B8A8_UNORM;
       }
-      else if (format == DXGI_FORMAT_R16G16B16A16_TYPELESS) // compatibility with render targets upgraded by RenoDX
+      else if (format == DXGI_FORMAT_R16G16B16A16_TYPELESS) 
       {
-         format = DXGI_FORMAT_R16G16B16A16_UNORM;
+         format = DXGI_FORMAT_R16G16B16A16_FLOAT;
       }
 
       D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc;
@@ -512,8 +501,6 @@ public:
       if (game_device_data.current_replacements.contains(resource.get()))
       {
          auto& replacement = game_device_data.replacement_textures[game_device_data.current_replacements[resource.get()]];
-         // should always be game_device_data.upscale_resolution but if a hash for a bloom shader is missing and an rtv
-         // is reused we still might end up with a smaller render target here
          resolution = {replacement.desc.Width, replacement.desc.Height};
          return game_device_data.replacement_textures[game_device_data.current_replacements[resource.get()]].rtv.get();
       }
@@ -594,13 +581,8 @@ public:
 
    static bool HandleTransformUpdate(ID3D11Buffer* buffer, const void* data, ID3D11DeviceContext* native_device_context, GameDeviceDataPersona5Royal& game_device_data, DeviceData& device_data)
    {
-      // the constant buffer GFD_VSCONST_TRANSFORM contains float4x4 mtxLocalToWorld, float4x4x mtxPrevLocalToWorld
-      // though at least for objects attached to bones mtxPrevLocalToWorld actually contains a transform matrix for
-      // the next frame instead of the previous, so we need to build a lookup for the actual previous transforms here
-      // and also apply the values we collected in the previous frame
       uint64_t hash_current = XXH3_64bits((const uint8_t*)data, sizeof(float4x4));
 
-      // skinned mesh vertex positions are already in view space
       if (hash_current == hash_identity)
       {
          return false;
@@ -649,8 +631,6 @@ public:
          D3D11_TEXTURE2D_DESC tex_desc;
          tex->GetDesc(&tex_desc);
 
-         // the normal gbuffer is DXGI_FORMAT_R10G10B10A2_UNORM (or DXGI_FORMAT_R16G16B16A16_FLOAT when upgraded by renodx)
-         // for planar reflections render target 1 is DXGI_FORMAT_R8G8B8A8_UNORM
          if (tex_desc.Format != DXGI_FORMAT_R10G10B10A2_UNORM &&
              tex_desc.Format != DXGI_FORMAT_R16G16B16A16_FLOAT)
          {
@@ -700,7 +680,6 @@ public:
                      float4x4 inv_view = view_proj_data->mtxView.GetTransposed().GetInverted();
                      float4x4 proj = inv_view * view_proj_data->mtxViewProj.GetTransposed();
                      float4x4 inv_proj = proj.GetInverted();
-                     // assume that projection doesn't change between frames
                      float4x4 prev_view = view_proj_data->mtxPrevViewProj.GetTransposed() * inv_proj;
 
                      proj.m20 -= 2.0f * projection_jitters.x / (float)target_desc.Width;
@@ -848,7 +827,6 @@ public:
       }
       else if (original_shader_hashes.Contains(shader_hashes_bloom_select))
       {
-         // only apply sr when we have the necessary input resources
          if (SrActive(device_data) &&
              game_device_data.depth_texture &&
              game_device_data.motion_vectors)
@@ -863,12 +841,10 @@ public:
 
             SetupSr(native_device_context, game_device_data, device_data);
 
-            // split the command list since DLSS must be executed on an immediate context
             native_device_context->FinishCommandList(TRUE, game_device_data.partial_command_list.put());
             if (game_device_data.modifiable_index_vertex_buffer)
             {
                D3D11_MAPPED_SUBRESOURCE mapped_buffer;
-               // When starting a new command list first map has to be D3D11_MAP_WRITE_DISCARD
                native_device_context->Map(game_device_data.modifiable_index_vertex_buffer.get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_buffer);
                native_device_context->Unmap(game_device_data.modifiable_index_vertex_buffer.get(), 0);
             }
@@ -877,7 +853,6 @@ public:
             device_data.has_drawn_main_post_processing = true;
          }
       }
-      // fallthrough replace rtv on bloom select as well
       if (game_device_data.frame_phase == FramePhase::POSTPROCESSING_AND_UI &&
           SrActive(device_data) &&
           (game_device_data.render_resolution.x != game_device_data.upscale_resolution.x ||
@@ -948,13 +923,14 @@ public:
          }
       }
 
-      if (SrActive(device_data) &&
+      // [피부 알파 채널 보호]: DLSS가 실제로 작동 중일 때만 안티앨리어싱 복사 셰이더 개입
+      if (SrActive(device_data) && game_device_data.has_drawn_upscaling &&
           (original_shader_hashes.Contains(shader_hashes_fxaa) ||
              original_shader_hashes.Contains(shader_hashes_smaa_blending)))
       {
          native_device_context->PSSetShader(device_data.native_pixel_shaders[CompileTimeStringHash("Copy RGB 1 A")].get(), nullptr, 0);
       }
-      else if (SrActive(device_data) &&
+      else if (SrActive(device_data) && game_device_data.has_drawn_upscaling &&
                (original_shader_hashes.Contains(shader_hashes_smaa_edge_detection) ||
                   original_shader_hashes.Contains(shader_hashes_smaa_weight_calculation)))
       {
@@ -962,14 +938,6 @@ public:
       }
       else if (original_shader_hashes.Contains(shader_hashes_blur))
       {
-         // the game has different stages that it combines for the blur effect when running
-         // this is a step that sometimes replaces the content of render target and
-         // sometimes is alpha blended
-         // in the school hallway it is blended on a version of the scene texture that hasn't
-         // been color graded yet leading to the scene noticably shifting color
-         // as far as I can tell the render target and source texture have basiscally the same
-         // content whenever this is used so copying it over before fixes the hallway and should
-         // be safe for everything else
          ComPtr<ID3D11ShaderResourceView> srv;
          native_device_context->PSGetShaderResources(0, 1, srv.put());
          ComPtr<ID3D11RenderTargetView> rtv;
@@ -1005,7 +973,6 @@ public:
       device_data.force_reset_sr = !game_device_data.has_drawn_upscaling;
       game_device_data.has_drawn_upscaling = false;
 
-      // Update TAA jitters:
       int phases = SR::GetDefaultJitterPhases();
       if (device_data.sr_type != SR::Type::None)
       {
@@ -1023,7 +990,7 @@ public:
              game_device_data.render_resolution.y > 0.0f &&
              game_device_data.upscale_resolution.y > 0.0f)
          {
-            device_data.texture_mip_lod_bias_offset = SR::GetMipLODBias(game_device_data.render_resolution.y, game_device_data.upscale_resolution.y); // This results in -1 at output res
+            device_data.texture_mip_lod_bias_offset = SR::GetMipLODBias(game_device_data.render_resolution.y, game_device_data.upscale_resolution.y); 
          }
          else
          {
@@ -1034,7 +1001,6 @@ public:
       game_device_data.frame_phase = FramePhase::SHADOW_MAP;
       game_device_data.render_target_changed = false;
 
-      // release all resources from the game we got this frame
       game_device_data.remainder_command_list.reset();
       game_device_data.draw_device_context = nullptr;
       game_device_data.source_color.reset();
@@ -1151,9 +1117,14 @@ public:
                ComPtr<ID3D11ShaderResourceView> resolve_texture_srv;
                ComPtr<ID3D11ShaderResourceView> color_srv;
 
+               // [블랙스크린 방지 포맷 전달]
+               DXGI_FORMAT sr_format = target_desc.Format;
+               if (sr_format == DXGI_FORMAT_R8G8B8A8_TYPELESS) sr_format = DXGI_FORMAT_R8G8B8A8_UNORM;
+               else if (sr_format == DXGI_FORMAT_R16G16B16A16_TYPELESS) sr_format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+
                {
                   D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc;
-                  srv_desc.Format = target_desc.Format;
+                  srv_desc.Format = sr_format;
                   srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
                   srv_desc.Texture2D.MostDetailedMip = 0;
                   srv_desc.Texture2D.MipLevels = 1;
@@ -1172,7 +1143,6 @@ public:
                      color_srv.put());
                }
 
-               // some sr methods don't retain the alpha channel - combine sr result with the alpha from the original color texture
                {
                   ID3D11ShaderResourceView* srvs[] = {resolve_texture_srv.get(), color_srv.get()};
                   ID3D11SamplerState* samplers[] = {device_data.sampler_state_linear.get()};
@@ -1239,7 +1209,6 @@ public:
          return false;
       }
 
-      // early we don't need any cbuffer values after gbuffers are finished
       if (game_device_data.frame_phase != FramePhase::SHADOW_MAP &&
           game_device_data.frame_phase != FramePhase::REFLECTION &&
           game_device_data.frame_phase != FramePhase::GBUFFER)
@@ -1247,7 +1216,6 @@ public:
          return false;
       }
 
-      // store values so we can find first change to the transform cbuffer
       if (game_device_data.frame_phase == FramePhase::SHADOW_MAP ||
           game_device_data.frame_phase == FramePhase::REFLECTION)
       {
@@ -1256,9 +1224,6 @@ public:
             ID3D11Buffer* buffer = (ID3D11Buffer*)dest.handle;
             D3D11_BUFFER_DESC bd;
             ((ID3D11Buffer*)dest.handle)->GetDesc(&bd);
-            // constant buffers used on draw thread are exclusively 7168 bytes in size
-            // the deferred context that handles the update of skinned meshes uses
-            // constant buffers sized at different powers of two
             if (bd.ByteWidth != 7168)
             {
                return false;
@@ -1270,7 +1235,6 @@ public:
          return false;
       }
 
-      // game_device_data.frame_phase == FramePhase::GBUFFER
       if ((ID3D11Buffer*)dest.handle == game_device_data.cb_transform)
       {
          ComPtr<ID3D11DeviceContext> native_device_context;
@@ -1303,8 +1267,6 @@ public:
 
    static bool OnCreateResource(reshade::api::device* device, reshade::api::resource_desc& desc, reshade::api::subresource_data* initial_data, reshade::api::resource_usage initial_state)
    {
-      // after starting the game or some scene transitions the selected shadow quality is not applied anymore
-      // and the middle setting is used instead which is 2048 so we just override that
       uint32_t shadow_map_size_override = g_shadow_map_size_override;
       if (shadow_map_size_override > 0 &&
           desc.type == reshade::api::resource_type::texture_2d &&
@@ -1324,11 +1286,10 @@ public:
       reshade::api::effect_runtime* runtime = nullptr;
       auto& game_device_data = GetGameDeviceData(device_data);
 
-      // [DLSS 깜빡임 방지 래치]: 프레임 리셋으로 인한 UI 플리커링 100% 방지 (1초 버퍼 유지)
       static uint32_t active_counter = 0;
       if (game_device_data.has_drawn_upscaling || device_data.has_drawn_sr)
       {
-         active_counter = 60; // 60프레임(약 1초) 동안 ACTIVE 신호 안정 유지
+         active_counter = 60; 
       }
       else if (active_counter > 0)
       {
@@ -1338,7 +1299,7 @@ public:
 
       ImGui::Spacing();
 
-      // === [섹션 1: DLSS 하드웨어 가동 실시간 계측기] ===
+      // [섹션 1: DLSS 하드웨어 가동 실시간 계측기]
       ImGui::TextColored(ImVec4(0.2f, 0.8f, 1.0f, 1.0f), "[ DLSS_HARDWARE_TELEMETRY ]");
       if (is_dlss_active)
       {
@@ -1363,7 +1324,7 @@ public:
       ImGui::Separator();
       ImGui::Spacing();
 
-      // === [섹션 2: KAKA 순수 HDR 파이프라인 진단창 (대시보드 통합)] ===
+      // [섹션 2: KAKA 순수 HDR 파이프라인 진단창]
       ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.0f, 1.0f), "[ KAKA_HDR_PIPELINE_STATUS ]");
       ImGui::BulletText("BACKBUFFER_FORMAT : DXGI_FORMAT_R16G16B16A16_FLOAT (scRGB_FP16) [OK]");
       ImGui::BulletText("COLOR_SPACE       : DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709 [OK]");
@@ -1373,7 +1334,7 @@ public:
       ImGui::Separator();
       ImGui::Spacing();
 
-      // === [섹션 3: 그래픽 품질 오버라이드] ===
+      // [섹션 3: 그래픽 품질 오버라이드]
       ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.9f, 1.0f), "[ GRAPHICS_OVERRIDE ]");
 
       const char* previewString = "기본값 (None)";
@@ -1434,13 +1395,10 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 {
    if (ul_reason_for_call == DLL_PROCESS_ATTACH)
    {
-      // [브랜딩] 언더바 안전 규격 적용 공식 프로젝트 명칭
       Globals::SetGlobals(PROJECT_NAME, "LUMA-Persona5_Royal-KAKA_HDR_Edition");
       Globals::DEVELOPMENT_STATE = Globals::ModDevelopmentState::Finished;
       Globals::VERSION = 1;
 
-      // need to patch the code that adds the resolution dependent mip bias to sampler states
-      // otherwise mip chain based effects break when the render resolution is 3840x2160
       enable_samplers_upgrade = PatchSamplerStates();
       samplers_upgrade_mode = 3;
 
@@ -1468,20 +1426,15 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
       shader_hashes_smaa_weight_calculation.pixel_shaders.emplace(std::stoul("4016ED43", nullptr, 16));
       shader_hashes_smaa_blending.pixel_shaders.emplace(std::stoul("960502CC", nullptr, 16));
 
-      // not exhaustive but the first shader used in frames during which only the UI is active
       shader_hashes_ui.pixel_shaders.emplace(std::stoul("5E008C96", nullptr, 16));
 
-      // cbuffer slots are fairly spread out for compute shaders any slot from 2 upwards is free,
-      // for pixel shaders 7 seem unused, for vertex shaders no slots are unused
       luma_settings_cbuffer_index = 7;
 
-      // 1) 백버퍼를 16비트 실수형(RGBA16_FLOAT)으로 강제 승격
+      // 1) 16비트 실수형 scRGB 스왑체인 통로 개방
       swapchain_format_upgrade_type = TextureFormatUpgradesType::AllowedEnabled;
-
-      // 2) DXGI 색공간을 순수 선형 scRGB로 지정
       swapchain_upgrade_type = SwapchainUpgradeType::scRGB;
 
-      // 3) 루마의 엉성한 자체 톤매퍼는 끄고 우리 KAKA 셰이더에게 넘김 
+      // 2) 루마 톤매퍼 차단 (KAKA 셰이더 무간섭 보장)
       force_disable_display_composition = true;
 
       game = new Persona5Royal();
