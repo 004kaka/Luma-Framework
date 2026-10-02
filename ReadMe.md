@@ -52,3 +52,6 @@ Starfield and Kingdom Come Deliverance Luma mods are not based on the Luma (gene
 
 # Why ReShade?
 It'd be possible to achieve the same without ReShade and game specific code hooks, by only using generic DirectX hooks, but it'd be exponentially more complicated (even if more performant) (some engines re-use render target textures for different purposes, so we couldn't easily tell which ones to upgrade, and ReShade offers settings serialization and a bunch of other features).
+
+
+...
