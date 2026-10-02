@@ -70,9 +70,11 @@ namespace
       auto ntHeaders = (PIMAGE_NT_HEADERS)baseAddr + dosHeader->e_lfanew;
 
       // only search in the first 25 MB that's where all the code is thanks to Denuvo the exe is unnecessarily large
+      // 처음 25MB 범위만 검색합니다. Denuvo 때문에 실행 파일이 불필요하게 커져 있어 실제 코드가 이 범위에 있기 때문입니다.
       std::size_t sectionSize = min(ntHeaders->OptionalHeader.SizeOfImage, 25U * 1024U * 1024U);
 
       // movss xmm2, [rcx+2CCh], jnz 5, mov xmm2, ... only occurs where we need it in every version released on steam so far
+      // Steam에 출시된 현재까지의 각 버전에서 이 패턴이 필요한 위치에만 나타난다는 전제에 따라 사용하는 패턴입니다.
       std::vector<std::byte> pattern = {std::byte{0xf3}, std::byte{0x0f}, std::byte{0x10}, std::byte{0x91},
          std::byte{0xcc}, std::byte{0x02}, std::byte{0x00}, std::byte{0x00},
          std::byte{0x75}, std::byte{0x0a}, std::byte{0xf3}, std::byte{0x0f},
@@ -100,6 +102,7 @@ namespace
 
       // when the resolution dependent mip bias is zero we add FLT_MIN so we can detect it and not
       // upgrade the sampler state
+      // 해상도에 따라 달라지는 mip bias가 0이면 FLT_MIN을 더해 해당 상태를 감지하고, 샘플러 상태를 업그레이드하지 않도록 합니다.
       std::vector<uint8_t> shellcode = {
          0xf3, 0x0f, 0x10, 0x91, 0xcc, 0x02, 0x00, 0x00,             // movss xmm2, dword ptr [rcx+2CCh]
          0x75, 0x30,                                                 // jne early out
@@ -136,6 +139,7 @@ namespace
       if (success)
       {
          // Build jump to shellcode
+         // 셸코드로 이동하기 위한 jump 명령을 구성합니다.
          uint8_t jmpToShellcode[13] = {0x49, 0xba, 0, 0, 0, 0, 0, 0, 0, 0, 0x41, 0xff, 0xe2}; // mov r10, [addr]; jmp r10
          memcpy(&jmpToShellcode[2], &codeAddr, sizeof(void*));
 
@@ -160,10 +164,13 @@ struct GameDeviceDataPersona5Royal final : public GameDeviceData
 {
 #if ENABLE_SR
    // SR
+   // Super Resolution(SR) 관련 데이터입니다.
    std::atomic<bool> has_drawn_upscaling = false;
 
    // Debug telemetry only. These values are read by the ImGui panel and
    // do not modify the rendering pipeline or any GPU resource.
+   // Debug telemetry 전용 값입니다. ImGui 패널에서 읽어 표시합니다.
+   // 이 값들은 렌더링 경로나 GPU 리소스를 변경하지 않습니다.
    std::atomic<bool> debug_sr_last_attempted = false;
    std::atomic<bool> debug_sr_last_success = false;
    std::atomic<bool> debug_sr_last_depth_available = false;
@@ -173,18 +180,22 @@ struct GameDeviceDataPersona5Royal final : public GameDeviceData
    uint2 debug_sr_last_output_resolution = {};
 
    // resources used to identify the deferred context used for scene drawing
+   // 장면을 그리는 데 사용되는 deferred context를 식별하기 위한 리소스입니다.
    ComPtr<ID3D11CommandList> remainder_command_list;
    std::atomic<ID3D11DeviceContext*> draw_device_context = nullptr;
 
    // textures we got from the game
+   // 게임에서 가져온 텍스처입니다.
    ComPtr<ID3D11Texture2D> source_color;
    ComPtr<ID3D11Resource> depth_texture;
    ComPtr<ID3D11Texture2D> motion_vectors;
 
    // the command list we split to interject dlss
+   // DLSS를 삽입하기 위해 분리한 command list입니다.
    ComPtr<ID3D11CommandList> partial_command_list;
 
    // resources used to apply sr
+   // SR 처리에 사용하는 리소스입니다.
    ComPtr<ID3D11Texture2D> decoded_motion_vectors;
    ComPtr<ID3D11UnorderedAccessView> decoded_motion_vectors_uav;
    ComPtr<ID3D11Texture2D> resolve_texture;
@@ -194,11 +205,15 @@ struct GameDeviceDataPersona5Royal final : public GameDeviceData
    ComPtr<ID3D11RenderTargetView> merged_texture_rtv;
 
    // pool for replacement textures
+   // 교체용 텍스처를 보관하는 풀입니다.
    std::vector<ReplacementTexture> replacement_textures;
    // active replacements for the current frame
+   // 현재 프레임에서 활성화된 교체 텍스처입니다.
    std::unordered_map<ID3D11Resource*, uint32_t> current_replacements;
    // the game uses this to draw geometry for the UI this is the only resource that gets mapped
    // after the bloom effect, as constant buffers are updated with UpdateSubresource
+   // 게임이 UI용 geometry를 그릴 때 사용하는 리소스입니다. 이 리소스만 매핑되며,
+   // bloom 효과 이후 constant buffer가 UpdateSubresource로 갱신되는 과정에서 사용됩니다.
    ComPtr<ID3D11Buffer> modifiable_index_vertex_buffer;
    uint2 render_resolution = {};
    uint2 upscale_resolution = {};
@@ -207,6 +222,7 @@ struct GameDeviceDataPersona5Royal final : public GameDeviceData
    float fov = 0.0f;
 
    // variables used to fix motion vectors on non-skinned moving objects
+   // 스키닝되지 않은 이동 물체의 motion vector를 보정하기 위한 변수입니다.
    std::unordered_map<uint64_t, float4x4> prev_local_to_view_lookup;
    std::unordered_map<uint64_t, float4x4> local_to_view_lookup;
    std::unordered_map<ID3D11Buffer*, std::array<uint8_t, 7168>> cbuffer_cache;
@@ -260,6 +276,7 @@ public:
       if (!reshade::get_config_value(runtime, NAME, "ShadowMapSizeOverride", g_shadow_map_size_override))
       {
          // older versions were saving the setting under the wrong key
+         // 이전 버전에서는 이 설정을 잘못된 키에 저장하고 있었습니다.
          reshade::get_config_value(runtime, NAME, "shadow_map_size_override", g_shadow_map_size_override);
       }
    }
@@ -272,6 +289,7 @@ public:
       game_device_data.target_resolution.y = device_data.output_resolution.y;
 
       // unless the ultra wide screen mod is installed output resolution is alway 16:9
+      // Ultra Wide Screen 모드가 설치되어 있지 않다면 출력 해상도는 항상 16:9입니다.
       if ((float)game_device_data.target_resolution.x / (float)game_device_data.target_resolution.y < 16.0f / 9.0f)
       {
          game_device_data.target_resolution.y = (game_device_data.target_resolution.x / 16) * 9;
@@ -307,6 +325,7 @@ public:
       }
 
       // no taa but needed for DLSS indicator in UI
+      // TAA 자체는 사용하지 않지만, UI의 DLSS 표시기를 위해 필요한 값입니다.
       device_data.taa_detected = true;
    }
 
@@ -526,6 +545,8 @@ public:
          auto& replacement = game_device_data.replacement_textures[game_device_data.current_replacements[resource.get()]];
          // should always be game_device_data.upscale_resolution but if a hash for a bloom shader is missing and an rtv
          // is reused we still might end up with a smaller render target here
+         // 원칙적으로 game_device_data.upscale_resolution을 사용해야 하지만, bloom shader의 hash가 없고 RTV가 재사용되면
+         // 여기에서 더 작은 render target을 사용할 수도 있습니다.
          resolution = {replacement.desc.Width, replacement.desc.Height};
          return game_device_data.replacement_textures[game_device_data.current_replacements[resource.get()]].rtv.get();
       }
@@ -610,9 +631,13 @@ public:
       // though at least for objects attached to bones mtxPrevLocalToWorld actually contains a transform matrix for
       // the next frame instead of the previous, so we need to build a lookup for the actual previous transforms here
       // and also apply the values we collected in the previous frame
+      // constant buffer GFD_VSCONST_TRANSFORM에는 mtxLocalToWorld와 mtxPrevLocalToWorld 행렬이 들어 있습니다.
+      // 하지만 bone에 연결된 객체에서는 mtxPrevLocalToWorld가 실제 이전 프레임이 아니라 다음 프레임의 transform을 담는 경우가 있어,
+      // 여기에서 실제 이전 transform을 찾기 위한 lookup을 만들고 이전 프레임에서 수집한 값을 함께 적용합니다.
       uint64_t hash_current = XXH3_64bits((const uint8_t*)data, sizeof(float4x4));
 
       // skinned mesh vertex positions are already in view space
+      // 스키닝된 mesh의 vertex position은 이미 view space 기준으로 저장되어 있습니다.
       if (hash_current == hash_identity)
       {
          return false;
@@ -663,6 +688,8 @@ public:
 
          // the normal gbuffer is DXGI_FORMAT_R10G10B10A2_UNORM (or DXGI_FORMAT_R16G16B16A16_FLOAT when upgraded by renodx)
          // for planar reflections render target 1 is DXGI_FORMAT_R8G8B8A8_UNORM
+         // 일반 G-buffer는 DXGI_FORMAT_R10G10B10A2_UNORM이며, RenoDX에 의해 업그레이드되면 DXGI_FORMAT_R16G16B16A16_FLOAT가 될 수 있습니다.
+         // planar reflection에서는 render target 1에 DXGI_FORMAT_R8G8B8A8_UNORM을 사용합니다.
          if (tex_desc.Format != DXGI_FORMAT_R10G10B10A2_UNORM &&
              tex_desc.Format != DXGI_FORMAT_R16G16B16A16_FLOAT)
          {
@@ -713,6 +740,7 @@ public:
                      float4x4 proj = inv_view * view_proj_data->mtxViewProj.GetTransposed();
                      float4x4 inv_proj = proj.GetInverted();
                      // assume that projection doesn't change between frames
+                     // 프레임 사이에서 projection이 변경되지 않는다고 가정합니다.
                      float4x4 prev_view = view_proj_data->mtxPrevViewProj.GetTransposed() * inv_proj;
 
                      proj.m20 -= 2.0f * projection_jitters.x / (float)target_desc.Width;
@@ -861,6 +889,7 @@ public:
       else if (original_shader_hashes.Contains(shader_hashes_bloom_select))
       {
          // only apply sr when we have the necessary input resources
+         // 필요한 입력 리소스가 있을 때만 SR을 적용합니다.
          if (SrActive(device_data) &&
              game_device_data.depth_texture &&
              game_device_data.motion_vectors)
@@ -876,11 +905,13 @@ public:
             SetupSr(native_device_context, game_device_data, device_data);
 
             // split the command list since DLSS must be executed on an immediate context
+            // DLSS는 immediate context에서 실행되어야 하므로 command list를 분리합니다.
             native_device_context->FinishCommandList(TRUE, game_device_data.partial_command_list.put());
             if (game_device_data.modifiable_index_vertex_buffer)
             {
                D3D11_MAPPED_SUBRESOURCE mapped_buffer;
                // When starting a new command list first map has to be D3D11_MAP_WRITE_DISCARD
+               // 새 command list를 시작할 때 첫 번째 map은 D3D11_MAP_WRITE_DISCARD 방식이어야 합니다.
                native_device_context->Map(game_device_data.modifiable_index_vertex_buffer.get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_buffer);
                native_device_context->Unmap(game_device_data.modifiable_index_vertex_buffer.get(), 0);
             }
@@ -890,6 +921,7 @@ public:
          }
       }
       // fallthrough replace rtv on bloom select as well
+      // fallthrough 경로에서도 bloom 선택 단계의 RTV를 교체합니다.
       if (game_device_data.frame_phase == FramePhase::POSTPROCESSING_AND_UI &&
           SrActive(device_data) &&
           (game_device_data.render_resolution.x != game_device_data.upscale_resolution.x ||
@@ -982,6 +1014,11 @@ public:
          // as far as I can tell the render target and source texture have basiscally the same
          // content whenever this is used so copying it over before fixes the hallway and should
          // be safe for everything else
+         // 게임은 실행 중 blur 효과를 위해 여러 단계를 조합합니다.
+         // 이 단계에서는 render target의 내용을 교체하기도 하고,
+         // alpha blending으로 합성하기도 합니다.
+         // 학교 복도에서는 아직 color grading이 적용되지 않은 scene texture 버전에 합성되므로 화면 색이 눈에 띄게 변합니다.
+         // 확인 가능한 범위에서는 이때 render target과 source texture의 내용이 기본적으로 같으므로, 사용 전에 복사하면 복도 문제를 해결하면서 다른 경우에도 안전합니다.
          ComPtr<ID3D11ShaderResourceView> srv;
          native_device_context->PSGetShaderResources(0, 1, srv.put());
          ComPtr<ID3D11RenderTargetView> rtv;
@@ -1018,6 +1055,7 @@ public:
       game_device_data.has_drawn_upscaling = false;
 
       // Update TAA jitters:
+      // TAA jitter 값을 갱신합니다.
       int phases = SR::GetDefaultJitterPhases();
       if (device_data.sr_type != SR::Type::None)
       {
@@ -1047,6 +1085,7 @@ public:
       game_device_data.render_target_changed = false;
 
       // release all resources from the game we got this frame
+      // 해당 프레임에 게임에서 가져온 모든 리소스를 해제합니다.
       game_device_data.remainder_command_list.reset();
       game_device_data.draw_device_context = nullptr;
       game_device_data.source_color.reset();
@@ -1163,6 +1202,8 @@ public:
 
                // Debug telemetry only. Do not change any SR resource, format,
                // shader, RTV, UAV, or D3D11 state in this block.
+               // Debug telemetry 전용 블록입니다. 이 부분에서는 SR 리소스, format,
+               // shader, RTV, UAV 또는 D3D11 상태를 변경하지 않습니다.
                game_device_data.debug_sr_last_attempted = true;
                game_device_data.debug_sr_last_depth_available = game_device_data.depth_texture != nullptr;
                game_device_data.debug_sr_last_motion_vectors_available = game_device_data.motion_vectors != nullptr;
@@ -1174,6 +1215,8 @@ public:
 
                // This is the actual return value from the Luma SR implementation.
                // It does not claim that physical Tensor Core execution was independently measured.
+               // 이것은 Luma SR 구현체가 실제로 반환한 값입니다.
+               // 물리적인 Tensor Core 실행 여부를 별도로 측정했다는 의미는 아닙니다.
                game_device_data.debug_sr_last_success = dlss_succeeded;
                game_device_data.has_drawn_upscaling = dlss_succeeded;
                device_data.has_drawn_sr = dlss_succeeded;
@@ -1206,6 +1249,7 @@ public:
                }
 
                // some sr methods don't retain the alpha channel - combine sr result with the alpha from the original color texture
+               // 일부 SR 방식은 alpha channel을 유지하지 않으므로, 원본 color texture의 alpha와 SR 결과를 결합합니다.
                {
                   ID3D11ShaderResourceView* srvs[] = {resolve_texture_srv.get(), color_srv.get()};
                   ID3D11SamplerState* samplers[] = {device_data.sampler_state_linear.get()};
@@ -1273,6 +1317,7 @@ public:
       }
 
       // early we don't need any cbuffer values after gbuffers are finished
+      // G-buffer 처리가 끝난 뒤에는 더 이상 cbuffer 값이 필요하지 않으므로 일찍 정리할 수 있습니다.
       if (game_device_data.frame_phase != FramePhase::SHADOW_MAP &&
           game_device_data.frame_phase != FramePhase::REFLECTION &&
           game_device_data.frame_phase != FramePhase::GBUFFER)
@@ -1281,6 +1326,7 @@ public:
       }
 
       // store values so we can find first change to the transform cbuffer
+      // transform cbuffer의 첫 번째 변경 지점을 찾을 수 있도록 값을 저장합니다.
       if (game_device_data.frame_phase == FramePhase::SHADOW_MAP ||
           game_device_data.frame_phase == FramePhase::REFLECTION)
       {
@@ -1292,6 +1338,8 @@ public:
             // constant buffers used on draw thread are exclusively 7168 bytes in size
             // the deferred context that handles the update of skinned meshes uses
             // constant buffers sized at different powers of two
+            // draw thread에서 사용하는 constant buffer는 모두 7168바이트 크기입니다.
+            // skinned mesh 업데이트를 처리하는 deferred context는 서로 다른 2의 거듭제곱 크기의 constant buffer를 사용합니다.
             if (bd.ByteWidth != 7168)
             {
                return false;
@@ -1304,6 +1352,7 @@ public:
       }
 
       // game_device_data.frame_phase == FramePhase::GBUFFER
+      // 현재 frame phase가 FramePhase::GBUFFER인지 나타내는 조건입니다.
       if ((ID3D11Buffer*)dest.handle == game_device_data.cb_transform)
       {
          ComPtr<ID3D11DeviceContext> native_device_context;
@@ -1338,6 +1387,8 @@ public:
    {
       // after starting the game or some scene transitions the selected shadow quality is not applied anymore
       // and the middle setting is used instead which is 2048 so we just override that
+      // 게임 시작 후 또는 일부 장면 전환 이후에는 선택한 shadow quality가 더 이상 적용되지 않고,
+      // 중간 설정인 2048이 사용되므로 이를 직접 override합니다.
       uint32_t shadow_map_size_override = g_shadow_map_size_override;
       if (shadow_map_size_override > 0 &&
           desc.type == reshade::api::resource_type::texture_2d &&
@@ -1369,11 +1420,13 @@ public:
       // 이 함수는 표시용 상태만 읽습니다.
       // DLSS/HDR 렌더링 경로, 셰이더, RTV/UAV/SRV, viewport 등의 상태를 변경하지 않습니다.
       // ==================================================================
+      // Persona 5 Royal용 KAKA HDR / Debug UI 영역입니다.
 
       // ------------------------------------------------------------------
       // 1. 기존 Persona 5 Royal 그래픽 설정
       //    ReShade/Luma에서 제공되는 DLSS / DLSS Preset 바로 아래에 위치하도록
       //    이 파일에서는 Shadow Map Size Override를 가장 먼저 그립니다.
+      // ------------------------------------------------------------------
       // ------------------------------------------------------------------
       const char* previewString;
       char buffer[32];
@@ -1448,6 +1501,7 @@ public:
       // ------------------------------------------------------------------
       // 2. 종합 상태 - 일반 사용자가 가장 먼저 확인하는 영역
       // ------------------------------------------------------------------
+      // ------------------------------------------------------------------
       const bool sr_selected = device_data.sr_type != SR::Type::None;
       const bool sr_last_attempted = game_device_data.debug_sr_last_attempted;
       const bool sr_last_success = game_device_data.debug_sr_last_success;
@@ -1469,6 +1523,7 @@ public:
 
       // ------------------------------------------------------------------
       // DLSS / SUPER RESOLUTION summary
+      // ------------------------------------------------------------------
       // ------------------------------------------------------------------
       ImGui::Separator();
       ImGui::TextColored(ImVec4(0.35f, 0.75f, 1.0f, 1.0f), "DLSS / SUPER RESOLUTION");
@@ -1504,6 +1559,7 @@ public:
       // ------------------------------------------------------------------
       // HDR summary
       // ------------------------------------------------------------------
+      // ------------------------------------------------------------------
       ImGui::Separator();
       ImGui::TextColored(ImVec4(1.0f, 0.60f, 0.20f, 1.0f), "HDR OUTPUT");
       ImGui::Separator();
@@ -1527,6 +1583,7 @@ public:
 
       // ------------------------------------------------------------------
       // 3. DLSS / SR 세부 확인
+      // ------------------------------------------------------------------
       // ------------------------------------------------------------------
       ImGui::Separator();
       ImGui::TextColored(ImVec4(0.35f, 0.75f, 1.0f, 1.0f), "DLSS / SR DEBUG");
@@ -1596,6 +1653,7 @@ public:
       // ------------------------------------------------------------------
       // 4. HDR 세부 확인
       // ------------------------------------------------------------------
+      // ------------------------------------------------------------------
       ImGui::Separator();
       ImGui::TextColored(ImVec4(1.0f, 0.60f, 0.20f, 1.0f), "HDR OUTPUT PATH");
       ImGui::Separator();
@@ -1626,6 +1684,7 @@ public:
 
       // ------------------------------------------------------------------
       // 5. 자세한 설명 - 아래로 모아 설정 영역을 방해하지 않음
+      // ------------------------------------------------------------------
       // ------------------------------------------------------------------
       ImGui::Spacing();
       ImGui::Separator();
@@ -1722,10 +1781,12 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
    {
       Globals::SetGlobals(PROJECT_NAME, "Luma KAKA HDR - Persona 5 Royal");
       Globals::DEVELOPMENT_STATE = Globals::ModDevelopmentState::Finished;
-      Globals::VERSION = 2;
+      Globals::VERSION = 3;
 
       // need to patch the code that adds the resolution dependent mip bias to sampler states
       // otherwise mip chain based effects break when the render resolution is 3840x2160
+      // resolution-dependent mip bias를 sampler state에 추가하는 코드를 patch해야 합니다.
+      // 그렇지 않으면 렌더링 해상도가 3840x2160일 때 mip chain 기반 효과가 깨집니다.
       enable_samplers_upgrade = PatchSamplerStates();
       samplers_upgrade_mode = 3;
 
@@ -1754,10 +1815,13 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
       shader_hashes_smaa_blending.pixel_shaders.emplace(std::stoul("960502CC", nullptr, 16));
 
       // not exhaustive but the first shader used in frames during which only the UI is active
+      // 완전한 목록은 아니지만, UI만 활성화된 프레임에서 사용되는 첫 번째 shader입니다.
       shader_hashes_ui.pixel_shaders.emplace(std::stoul("5E008C96", nullptr, 16));
 
       // cbuffer slots are fairly spread out for compute shaders any slot from 2 upwards is free,
       // for pixel shaders 7 seem unused, for vertex shaders no slots are unused
+      // compute shader의 cbuffer slot은 비교적 여유가 있어 2번 이상은 사용할 수 있고,
+      // pixel shader에서는 7번이 사용되지 않는 것으로 보이며, vertex shader에서는 사용 가능한 slot이 없습니다.
       luma_settings_cbuffer_index = 7;
 
       // 1) 백버퍼를 16비트 실수형(RGBA16_FLOAT)으로 강제 승격
