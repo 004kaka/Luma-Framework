@@ -1695,8 +1695,7 @@ public:
 
       ImGui::TextColored(ImVec4(0.35f, 0.75f, 1.0f, 1.0f), "DLSS / SUPER RESOLUTION");
       ImGui::TextWrapped(
-         "현재 표시하는 DLSS는 Frame Generation이 아니라 Super Resolution 경로입니다.
-"
+         "현재 표시하는 DLSS는 Frame Generation이 아니라 Super Resolution 경로입니다.\n"
          "낮은 해상도로 렌더링한 화면을 더 높은 출력 해상도에 맞게 재구성하는 기능입니다.");
       ImGui::TextWrapped(
          "위의 DLSS ACTIVE 표시는 Luma의 SR 구현체 선택 상태와 실제 최근 SR Draw 성공 여부를 함께 확인하여 판단합니다. "
