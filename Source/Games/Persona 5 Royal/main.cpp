@@ -1422,13 +1422,6 @@ public:
       // ==================================================================
       // Persona 5 Royal용 KAKA HDR / Debug UI 영역입니다.
 
-      // 상단 완충 영역: 탭 직후의 클릭 오입력을 줄이기 위해 2줄 여백, 구분선, 8줄 여백, 구분선을 배치합니다.
-      ImGui::Spacing();
-      ImGui::Spacing();
-      ImGui::Separator();
-      ImGui::Dummy(ImVec2(0.0f, ImGui::GetTextLineHeightWithSpacing() * 8.0f));
-      ImGui::Separator();
-
       // UI 색상 체계는 장식 목적이 아니라 정보의 종류와 중요도를 시각적으로 구분하여 가독성을 높이기 위해 사용합니다.
       // Bright Yellow는 핵심 ACTIVE 상태, Pink는 HDR 관련 제목, Green은 보조 상태/정보를 구분하는 데 사용합니다.
 
@@ -1496,7 +1489,7 @@ public:
       }
       if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
       {
-         ImGui::SetNextWindowSizeConstraints(ImVec2(0.0f, 0.0f), ImVec2(330.0f, FLT_MAX));
+         ImGui::SetNextWindowSizeConstraints(ImVec2(360.0f, 0.0f), ImVec2(360.0f, FLT_MAX));
          ImGui::BeginTooltip();
          ImGui::TextWrapped(
             "게임의 Shadow Quality가 장면 전환 후 2048로 돌아가는 문제를 보정합니다.\n\n"
@@ -1739,11 +1732,9 @@ public:
 
    void PrintImGuiAbout() override
    {
-      // 상단 완충 영역: 탭 직후의 클릭 오입력을 줄이기 위해 2줄 여백, 구분선, 8줄 여백, 구분선을 배치합니다.
-      ImGui::Spacing();
-      ImGui::Spacing();
+      // 상단 완충 영역: 탭 직후의 클릭 오입력을 줄이기 위해 구분선, 4줄 여백, 구분선을 배치합니다.
       ImGui::Separator();
-      ImGui::Dummy(ImVec2(0.0f, ImGui::GetTextLineHeightWithSpacing() * 8.0f));
+      ImGui::Dummy(ImVec2(0.0f, ImGui::GetTextLineHeightWithSpacing() * 4.0f));
       ImGui::Separator();
 
       // About 색상 체계는 장식 목적이 아니라 제목의 계층과 정보의 종류를 구분하여 가독성을 높이기 위해 사용합니다.
@@ -1770,7 +1761,7 @@ public:
       ImGui::BulletText("Persona 5 Royal 그래픽 설정 개선");
 
       ImGui::Separator();
-      ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.6f, 1.0f), "KAKA 에디션 버전 V4");
+      ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.6f, 1.0f), "KAKA 에디션 버전 V5");
       ImGui::Separator();
 
       ImGui::Separator();
@@ -1794,7 +1785,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
    {
       Globals::SetGlobals(PROJECT_NAME, "Luma KAKA HDR - Persona 5 Royal");
       Globals::DEVELOPMENT_STATE = Globals::ModDevelopmentState::Finished;
-      Globals::VERSION = 4;
+      Globals::VERSION = 5;
 
       // need to patch the code that adds the resolution dependent mip bias to sampler states
       // otherwise mip chain based effects break when the render resolution is 3840x2160
