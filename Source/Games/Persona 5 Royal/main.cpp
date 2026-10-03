@@ -10,6 +10,7 @@
 #define XXH_STATIC_LINKING_ONLY
 #define XXH_IMPLEMENTATION
 #include "xxhash.h"
+#include "..\..\Core\utils\display.hpp"
 #include <dxgi1_6.h>
 
 enum class FramePhase
@@ -241,14 +242,12 @@ struct GameDeviceDataPersona5Royal final : public GameDeviceData
    // V9 DXGI/Swapchain 정보 표시 전용 값입니다. UI에서 ReShade swapchain 색 공간과
    // Windows/DXGI 출력 HDR 상태를 독립적으로 표시하기 위해 사용하며 렌더링 경로를 변경하지 않습니다.
    ComPtr<IDXGISwapChain> dxgi_swapchain;
-   ComPtr<IDXGIFactory1> dxgi_factory;
-   ComPtr<IDXGIOutput6> dxgi_output;
-   HWND dxgi_output_window = nullptr;
-   DXGI_COLOR_SPACE_TYPE reshade_swapchain_color_space = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
-   DXGI_COLOR_SPACE_TYPE dxgi_output_color_space = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
+   reshade::api::swapchain* reshade_swapchain = nullptr;
+   reshade::api::color_space reshade_swapchain_color_space = reshade::api::color_space::unknown;
    bool reshade_swapchain_color_space_valid = false;
-   bool dxgi_output_info_valid = false;
-   bool dxgi_hdr_active = false;
+   bool luma_hdr_detection_valid = false;
+   bool luma_hdr_supported = false;
+   bool luma_hdr_active = false;
 };
 
 class Persona5Royal final : public Game
@@ -263,138 +262,61 @@ class Persona5Royal final : public Game
       return device_data.sr_type != SR::Type::None && !device_data.sr_suppressed;
    }
 
-   // 한글: ReShade의 현재 Swapchain Color Space를 별도로 읽습니다.
-   // Windows/DXGI HDR Active 판정과 혼동하지 않으며, 이 값은 UI 표시 전용입니다.
-   //
-   // English: Reads the current ReShade swapchain color space independently.
-   // This value must not be used as the Windows/DXGI HDR Active state and is display-only.
+   // 한글: ReShade API가 관리하는 현재 Swapchain Color Space를 직접 읽습니다.
+   // Windows/DXGI HDR Active 판정과는 독립된 값입니다.
+   // English: Read the current swapchain color space directly from ReShade.
+   // This value is independent from the Windows/DXGI HDR Active state.
    static void UpdateReShadeSwapchainColorSpace(GameDeviceDataPersona5Royal& game_device_data)
    {
       game_device_data.reshade_swapchain_color_space_valid = false;
-      if (!game_device_data.dxgi_swapchain)
+      game_device_data.reshade_swapchain_color_space = reshade::api::color_space::unknown;
+
+      if (game_device_data.reshade_swapchain == nullptr)
          return;
 
-      ComPtr<IDXGISwapChain3> swapchain3;
-      if (FAILED(game_device_data.dxgi_swapchain.As(&swapchain3)))
-         return;
-
-      DXGI_COLOR_SPACE_TYPE color_space = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
-      if (SUCCEEDED(swapchain3->GetColorSpace1(&color_space)))
+      const reshade::api::color_space color_space = game_device_data.reshade_swapchain->get_color_space();
+      if (color_space != reshade::api::color_space::unknown)
       {
          game_device_data.reshade_swapchain_color_space = color_space;
          game_device_data.reshade_swapchain_color_space_valid = true;
       }
    }
 
-   // 한글: 현재 창이 실제로 표시되는 DXGI Output을 다시 찾고 최신 Output
-   //       ColorSpace를 읽습니다. IsCurrent()가 FALSE이면 기존 Output 객체를
-   //       재사용하지 않고 Output 열거를 다시 수행합니다.
-   //
-   // English: Re-resolves the DXGI Output currently displaying the window and
-   // reads its latest ColorSpace. When IsCurrent() is FALSE, stale Output objects
-   // are not reused; the outputs are enumerated again.
-   static void UpdateDxgiHdrStatus(GameDeviceDataPersona5Royal& game_device_data)
+   // 한글: Luma Framework의 실제 HDR 판정 함수를 사용합니다.
+   // Windows 11 24H2에서는 Advanced Color 정보를 우선 사용하고,
+   // 구형 경로에서는 Luma가 사용하는 DXGI Output Color Space fallback을 사용합니다.
+   // English: Use Luma Framework's actual HDR detection function.
+   // Luma prefers Windows Advanced Color information and falls back to its DXGI output path.
+   static void UpdateLumaHdrDetection(GameDeviceDataPersona5Royal& game_device_data)
    {
-      game_device_data.dxgi_output_info_valid = false;
-      game_device_data.dxgi_hdr_active = false;
+      game_device_data.luma_hdr_detection_valid = false;
+      game_device_data.luma_hdr_supported = false;
+      game_device_data.luma_hdr_active = false;
 
-      if (!game_device_data.dxgi_swapchain || !game_device_data.dxgi_factory)
+      if (!game_device_data.dxgi_swapchain)
          return;
 
       DXGI_SWAP_CHAIN_DESC swapchain_desc = {};
       if (FAILED(game_device_data.dxgi_swapchain->GetDesc(&swapchain_desc)))
          return;
 
-      game_device_data.dxgi_output_window = swapchain_desc.OutputWindow;
-      if (!game_device_data.dxgi_output_window)
+      ComPtr<IDXGISwapChain3> swapchain3;
+      if (FAILED(game_device_data.dxgi_swapchain->QueryInterface(IID_PPV_ARGS(swapchain3.put()))))
          return;
 
-      RECT window_rect = {};
-      if (!GetWindowRect(game_device_data.dxgi_output_window, &window_rect))
-         return;
+      bool supported = false;
+      bool enabled = false;
+      const bool detection_succeeded = Display::IsHDRSupportedAndEnabled(
+         swapchain_desc.OutputWindow, supported, enabled, swapchain3.get());
 
-      // Microsoft recommends checking IsCurrent() and refreshing output enumeration
-      // when DXGI display state changes.
-      // Microsoft 권장 방식에 따라 DXGI 상태 변경 시 최신 Output을 다시 열거합니다.
-      const BOOL factory_current = game_device_data.dxgi_factory->IsCurrent();
-      bool need_output_refresh = !game_device_data.dxgi_output || !factory_current;
-
-      if (!need_output_refresh)
-      {
-         DXGI_OUTPUT_DESC cached_desc = {};
-         if (FAILED(game_device_data.dxgi_output->GetDesc(&cached_desc)))
-            need_output_refresh = true;
-         else
-         {
-            RECT intersection = {};
-            if (!IntersectRect(&intersection, &window_rect, &cached_desc.DesktopCoordinates))
-               need_output_refresh = true;
-         }
-      }
-
-      if (need_output_refresh)
-      {
-         ComPtr<IDXGIOutput> selected_output;
-         LONG best_intersection = -1;
-
-         for (UINT adapter_index = 0; ; ++adapter_index)
-         {
-            ComPtr<IDXGIAdapter1> adapter;
-            if (game_device_data.dxgi_factory->EnumAdapters1(adapter_index, adapter.put()) == DXGI_ERROR_NOT_FOUND)
-               break;
-
-            for (UINT output_index = 0; ; ++output_index)
-            {
-               ComPtr<IDXGIOutput> output;
-               if (adapter->EnumOutputs(output_index, output.put()) == DXGI_ERROR_NOT_FOUND)
-                  break;
-
-               DXGI_OUTPUT_DESC output_desc = {};
-               if (FAILED(output->GetDesc(&output_desc)))
-                  continue;
-
-               RECT intersection = {};
-               if (!IntersectRect(&intersection, &window_rect, &output_desc.DesktopCoordinates))
-                  continue;
-
-               const LONG width = intersection.right - intersection.left;
-               const LONG height = intersection.bottom - intersection.top;
-               const LONG area = width > 0 && height > 0 ? width * height : 0;
-               if (area > best_intersection)
-               {
-                  best_intersection = area;
-                  selected_output = output;
-               }
-            }
-         }
-
-         game_device_data.dxgi_output.Reset();
-         if (selected_output)
-         {
-            selected_output.As(&game_device_data.dxgi_output);
-         }
-      }
-
-      if (!game_device_data.dxgi_output)
-      {
-         // If the current Output cannot be resolved, report an unknown state instead of guessing.
-         // 현재 Output을 확인할 수 없으면 추측하지 않고 보류 상태로 유지합니다.
-         return;
-      }
-
-      DXGI_OUTPUT_DESC1 output_desc1 = {};
-      if (FAILED(game_device_data.dxgi_output->GetDesc1(&output_desc1)))
-         return;
-
-      game_device_data.dxgi_output_color_space = output_desc1.ColorSpace;
-      game_device_data.dxgi_output_info_valid = true;
-
-      // DXGI reports this color space for the HDR/Advanced Color HDR path.
-      // DXGI는 이 색 공간을 HDR/Advanced Color HDR 경로로 보고합니다.
-      game_device_data.dxgi_hdr_active =
-         output_desc1.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020;
+      // 한글: Luma의 함수가 구형 fallback 경로를 사용하면 반환값이 false여도
+      //       enabled/supported 값 자체는 실제 판정 결과를 담을 수 있습니다.
+      // English: Luma may return false after using its legacy fallback path even though
+      // the enabled/supported outputs contain a usable detection result.
+      game_device_data.luma_hdr_detection_valid = detection_succeeded || supported || enabled;
+      game_device_data.luma_hdr_supported = supported;
+      game_device_data.luma_hdr_active = enabled;
    }
-
 public:
    void OnInit(bool async) override
    {
@@ -434,31 +356,25 @@ public:
       auto& device_data = *swapchain->get_device()->get_private_data<DeviceData>();
       auto& game_device_data = GetGameDeviceData(device_data);
 
-      // 한글: Native DXGI swapchain과 Factory를 확보합니다. V9 감지는 표시 정보만
-      //       읽으며 기존 Swapchain/HDR 렌더링 설정은 변경하지 않습니다.
-      // English: Acquire the native DXGI swapchain and factory for V9 telemetry only.
+      // 한글: Native DXGI swapchain을 확보합니다. V9 감지는 표시 정보만 읽으며
+      //       기존 Swapchain/HDR 렌더링 설정은 변경하지 않습니다.
+      // English: Acquire the native DXGI swapchain for V9 telemetry only.
       // The detection reads state and does not modify the existing swapchain/HDR pipeline.
-      game_device_data.dxgi_swapchain.Reset();
-      game_device_data.dxgi_factory.Reset();
-      game_device_data.dxgi_output.Reset();
-      game_device_data.dxgi_output_window = nullptr;
+      game_device_data.reshade_swapchain = swapchain;
+      game_device_data.reshade_swapchain_color_space = reshade::api::color_space::unknown;
+      game_device_data.reshade_swapchain_color_space_valid = false;
+      game_device_data.luma_hdr_detection_valid = false;
+      game_device_data.luma_hdr_supported = false;
+      game_device_data.luma_hdr_active = false;
 
-      if (void* native_swapchain = swapchain->get_native())
+      const uint64_t native_swapchain_value = swapchain->get_native();
+      if (native_swapchain_value != 0)
       {
-         ComPtr<IDXGISwapChain> dxgi_swapchain;
-         if (SUCCEEDED(reinterpret_cast<IUnknown*>(native_swapchain)->QueryInterface(IID_PPV_ARGS(dxgi_swapchain.put()))))
+         auto* native_unknown = reinterpret_cast<IUnknown*>(static_cast<uintptr_t>(native_swapchain_value));
+         if (SUCCEEDED(native_unknown->QueryInterface(IID_PPV_ARGS(game_device_data.dxgi_swapchain.put()))))
          {
-            game_device_data.dxgi_swapchain = dxgi_swapchain;
-
-            ComPtr<IDXGIDevice> dxgi_device;
-            ComPtr<IDXGIAdapter> adapter;
-            if (SUCCEEDED(dxgi_swapchain->GetDevice(IID_PPV_ARGS(dxgi_device.put()))) &&
-                SUCCEEDED(dxgi_device->GetAdapter(adapter.put())) &&
-                SUCCEEDED(adapter->GetParent(IID_PPV_ARGS(game_device_data.dxgi_factory.put()))))
-            {
-               UpdateReShadeSwapchainColorSpace(game_device_data);
-               UpdateDxgiHdrStatus(game_device_data);
-            }
+            UpdateReShadeSwapchainColorSpace(game_device_data);
+            UpdateLumaHdrDetection(game_device_data);
          }
       }
 
@@ -1227,7 +1143,7 @@ public:
       // English: Refresh DXGI state every frame so Windows HDR and output changes
       // are reflected while the game is running. Detection does not modify rendering state.
       UpdateReShadeSwapchainColorSpace(game_device_data);
-      UpdateDxgiHdrStatus(game_device_data);
+      UpdateLumaHdrDetection(game_device_data);
 
       for (size_t i = 0; i < game_device_data.replacement_textures.size(); ++i)
       {
@@ -1707,7 +1623,8 @@ public:
       const bool display_composition_disabled = force_disable_display_composition;
       const bool hdr_output_path_configured =
          format_upgrade_configured && scrgb_configured && display_composition_disabled;
-      const bool hdr_active_status = hdr_output_path_configured && game_device_data.dxgi_output_info_valid && game_device_data.dxgi_hdr_active;
+      const bool hdr_active_status = hdr_output_path_configured &&
+         game_device_data.luma_hdr_detection_valid && game_device_data.luma_hdr_active;
 
       // ------------------------------------------------------------------
       // DLSS / SUPER RESOLUTION summary
@@ -1821,23 +1738,23 @@ public:
       ImGui::TextColored(ImVec4(1.0f, 0.4118f, 0.7059f, 1.0f), "HDR ACTIVE STATUS / HDR 활성 상태");
       ImGui::Separator();
 
-      if (!game_device_data.dxgi_output_info_valid)
+      if (!game_device_data.luma_hdr_detection_valid)
       {
          ImGui::TextColored(ImVec4(0.35f, 0.75f, 1.0f, 1.0f), "● 보류");
          ImGui::TextWrapped(
-            "현재 Windows/DXGI 출력 상태를 아직 확인하지 못했습니다. HDR 상태를 임의로 단정하지 않습니다.");
+            "Luma HDR Detection 결과를 아직 확인하지 못했습니다. HDR 상태를 임의로 단정하지 않습니다.");
       }
       else if (hdr_active_status)
       {
          ImGui::TextColored(ImVec4(0.20f, 1.0f, 0.35f, 1.0f), "● 활성화");
          ImGui::TextWrapped(
-            "Luma HDR 출력 경로와 Windows/DXGI HDR 상태가 모두 확인되어 HDR이 활성화된 것으로 판단합니다.");
+            "Luma HDR 출력 경로와 Luma HDR Detection 결과가 모두 활성 상태로 확인되었습니다.");
       }
       else
       {
          ImGui::TextColored(ImVec4(1.0f, 0.25f, 0.25f, 1.0f), "● 비활성화");
          ImGui::TextWrapped(
-            "Luma HDR 출력 경로 또는 Windows/DXGI HDR 상태가 활성 상태가 아닙니다. 아래 HDR 세부 항목을 확인하십시오.");
+            "Luma HDR 출력 경로 또는 Luma HDR Detection 결과가 활성 상태가 아닙니다. 아래 HDR 세부 항목을 확인하십시오.");
       }
 
       ImGui::Spacing();
@@ -1870,26 +1787,33 @@ public:
       ImGui::SameLine();
       if (game_device_data.reshade_swapchain_color_space_valid)
       {
-         ImGui::TextColored(ImVec4(0.20f, 1.0f, 0.35f, 1.0f), "%s",
-            game_device_data.reshade_swapchain_color_space == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 ? "RGB_FULL_G2084_NONE_P2020" :
-            game_device_data.reshade_swapchain_color_space == DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709 ? "RGB_FULL_G22_NONE_P709" : "OTHER");
+         const char* color_space_name = "OTHER";
+         switch (game_device_data.reshade_swapchain_color_space)
+         {
+         case reshade::api::color_space::srgb: color_space_name = "sRGB"; break;
+         case reshade::api::color_space::scrgb: color_space_name = "scRGB linear"; break;
+         case reshade::api::color_space::hdr10_pq: color_space_name = "HDR10 PQ"; break;
+         case reshade::api::color_space::hdr10_hlg: color_space_name = "HDR10 HLG"; break;
+         default: break;
+         }
+         ImGui::TextColored(ImVec4(0.20f, 1.0f, 0.35f, 1.0f), "%s", color_space_name);
       }
       else
       {
          ImGui::TextColored(ImVec4(0.35f, 0.75f, 1.0f, 1.0f), "PENDING");
       }
 
-      // 한글: Windows/DXGI가 현재 Output에 대해 보고하는 HDR 상태를 실시간으로 표시합니다.
+      // 한글: Luma Framework가 실제로 판정한 HDR 상태를 표시합니다.
       // 기존 Color Space : scRGB와 ReShade Color Space에는 연결하지 않습니다.
-      // English: Display the current Windows/DXGI HDR state reported by the active output in real time.
+      // English: Display the HDR state determined by Luma Framework.
       // Keep it independent from the existing scRGB and ReShade color-space items.
-      ImGui::Text("HDR Active         : ");
+      ImGui::Text("Luma HDR Detection : ");
       ImGui::SameLine();
-      if (!game_device_data.dxgi_output_info_valid)
+      if (!game_device_data.luma_hdr_detection_valid)
          ImGui::TextColored(ImVec4(0.35f, 0.75f, 1.0f, 1.0f), "보류");
       else
-         ImGui::TextColored(game_device_data.dxgi_hdr_active ? ImVec4(0.20f, 1.0f, 0.35f, 1.0f) : ImVec4(1.0f, 0.25f, 0.25f, 1.0f),
-            "%s", game_device_data.dxgi_hdr_active ? "활성화" : "비활성화");
+         ImGui::TextColored(game_device_data.luma_hdr_active ? ImVec4(0.20f, 1.0f, 0.35f, 1.0f) : ImVec4(1.0f, 0.25f, 0.25f, 1.0f),
+            "%s", game_device_data.luma_hdr_active ? "활성화" : "비활성화");
 
       // 한글: Display Composition은 기능을 삭제하지 않고 보존합니다.
       // 현재 UI에서는 별도로 표시할 필요가 없어 표시 코드만 주석 처리합니다.
@@ -2009,11 +1933,12 @@ public:
       ImGui::Spacing();
       ImGui::TextColored(ImVec4(1.0f, 0.4118f, 0.7059f, 1.0f), "HDR");
       ImGui::TextWrapped(
-         "HDR ACTIVE는 Luma의 HDR 출력 경로 구성 상태와 Windows/DXGI가 현재 Output에 대해 보고하는 HDR 상태를 함께 확인하여 표시합니다.\n"
-         "Windows/DXGI 상태를 아직 확인하지 못한 경우에는 보류로 표시합니다.");
+         "Luma HDR Detection은 Luma Framework의 실제 HDR 판정 로직을 사용합니다.\n"
+         "Windows Advanced Color 정보를 우선 확인하고, 필요한 경우 Luma가 사용하는 DXGI Output 경로를 fallback으로 사용합니다.\n"
+         "판정 결과를 확인하지 못한 경우에는 보류로 표시합니다.");
       ImGui::TextWrapped(
-         "중요: HDR Active는 모니터의 HDR 지원 여부를 의미하지 않습니다.\n"
-         "현재 애플리케이션이 표시되는 DXGI Output이 HDR/Advanced Color HDR 상태로 보고되는지를 확인합니다.");
+         "중요: Luma HDR Detection은 모니터의 HDR 지원 여부만을 의미하지 않습니다.\n"
+         "현재 애플리케이션의 출력 대상에 대해 Luma가 판정한 HDR 활성 상태를 표시합니다.");
 
       ImGui::Spacing();
       ImGui::TextColored(ImVec4(0.75f, 0.75f, 1.0f, 1.0f), "R16G16B16A16_FLOAT란?");
@@ -2063,22 +1988,22 @@ public:
       ImGui::BulletText("DLSS / Super Resolution 상태 확인");
       ImGui::BulletText("HDR 출력 경로 상태 확인");
       ImGui::BulletText("ReShade Swapchain Color Space 확인");
-      ImGui::BulletText("Windows / DXGI HDR Active 실시간 확인");
+      ImGui::BulletText("Luma HDR Detection 실시간 확인");
       ImGui::BulletText("Persona 5 Royal 그래픽 설정 개선");
 
       ImGui::Separator();
-      ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.6f, 1.0f), "KAKA 에디션 버전 V9");
+      ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.6f, 1.0f), "KAKA 에디션 버전 V9-Fix2");
       ImGui::Separator();
 
       ImGui::Separator();
       ImGui::TextColored(ImVec4(1.0f, 0.4118f, 0.7059f, 1.0f), "변경 내역");
       ImGui::Separator();
       ImGui::TextWrapped("V8 정상 변경사항 유지");
-      ImGui::TextWrapped("V9 - ReShade 현재 Swapchain Color Space 별도 감지/표시");
-      ImGui::TextWrapped("V9 - Windows / DXGI HDR Active 실시간 감지/표시");
-      ImGui::TextWrapped("V9 - HDR ACTIVE STATUS / HDR 출력 검증 UI 정리");
-      ImGui::TextWrapped("V9 - Display Composition UI 표시 주석 처리");
-      ImGui::TextWrapped("V9 - V8의 잘못된 DXGI HDR 감지 방식 수정");
+      ImGui::TextWrapped("V9-Fix2 - ReShade 현재 Swapchain Color Space를 실제 ReShade API로 감지/표시");
+      ImGui::TextWrapped("V9-Fix2 - Luma 실제 HDR Detection 경로로 HDR 상태 감지/표시");
+      ImGui::TextWrapped("V9-Fix2 - V9의 잘못된 DXGI/ReShade 탐지 API 사용 제거");
+      ImGui::TextWrapped("V9-Fix2 - HDR ACTIVE STATUS / HDR 출력 검증 UI 명칭 및 판정 연결 수정");
+      ImGui::TextWrapped("V9-Fix2 - Display Composition UI 표시 주석 유지");
       ImGui::TextWrapped("- 2026년 10월 3일 06시 14분");
 
       ImGui::Separator();
