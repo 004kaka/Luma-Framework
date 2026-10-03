@@ -1560,6 +1560,75 @@ public:
       ImGui::Spacing();
 
       // ------------------------------------------------------------------
+      // DLSS MODE
+      //    실제 최근 SR 입력/출력 해상도 비율을 기준으로 DLSS 모드를 표시합니다.
+      //    이 영역은 SR 렌더링 경로를 변경하지 않고 현재 상태를 읽어 표시만 합니다.
+      // ------------------------------------------------------------------
+      ImGui::Separator();
+      ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.6f, 1.0f), "DLSS MODE");
+      ImGui::Separator();
+
+      if (sr_last_attempted &&
+          game_device_data.debug_sr_last_output_resolution.y > 0 &&
+          game_device_data.debug_sr_last_render_resolution.y > 0)
+      {
+         const float scale =
+            static_cast<float>(game_device_data.debug_sr_last_render_resolution.y) /
+            static_cast<float>(game_device_data.debug_sr_last_output_resolution.y);
+
+         const char* dlss_mode = "DLSS";
+         const char* dlss_mode_description =
+            "현재 렌더링 해상도와 출력 해상도 비율을 기준으로 DLSS 모드를 표시합니다.";
+
+         if (scale >= 0.98f)
+         {
+            dlss_mode = "DLAA";
+            dlss_mode_description =
+               "현재 설정된 해상도 그대로 렌더링한 후,\n"
+               "AI 기반 안티앨리어싱을 적용합니다.";
+         }
+         else if (scale >= 0.63f)
+         {
+            dlss_mode = "Quality";
+            dlss_mode_description =
+               "약 67% 해상도로 렌더링한 후,\n"
+               "현재 설정된 해상도로 업스케일링합니다.";
+         }
+         else if (scale >= 0.54f)
+         {
+            dlss_mode = "Balanced";
+            dlss_mode_description =
+               "약 58% 해상도로 렌더링한 후,\n"
+               "현재 설정된 해상도로 업스케일링합니다.";
+         }
+         else if (scale >= 0.42f)
+         {
+            dlss_mode = "Performance";
+            dlss_mode_description =
+               "약 50% 해상도로 렌더링한 후,\n"
+               "현재 설정된 해상도로 업스케일링합니다.";
+         }
+         else
+         {
+            dlss_mode = "Ultra Performance";
+            dlss_mode_description =
+               "약 33% 해상도로 렌더링한 후,\n"
+               "현재 설정된 해상도로 업스케일링합니다.";
+         }
+
+         ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.6f, 1.0f), "● %s", dlss_mode);
+         ImGui::TextWrapped("%s", dlss_mode_description);
+      }
+      else
+      {
+         ImGui::TextColored(ImVec4(1.0f, 0.80f, 0.20f, 1.0f), "● WAITING");
+         ImGui::TextWrapped(
+            "현재 SR 입력/출력 해상도 정보가 없어 DLSS 모드를 확인할 수 없습니다.");
+      }
+
+      ImGui::Spacing();
+
+      // ------------------------------------------------------------------
       // HDR summary
       // ------------------------------------------------------------------
       // ------------------------------------------------------------------
@@ -1701,6 +1770,15 @@ public:
       ImGui::TextWrapped(
          "위의 DLSS ACTIVE 표시는 Luma의 SR 구현체 선택 상태와 실제 최근 SR Draw 성공 여부를 함께 확인하여 판단합니다.\n"
          "따라서 단순히 설정 메뉴에서 켜져 있다는 것만 보고 ACTIVE로 표시하지 않습니다.");
+
+      ImGui::Spacing();
+      ImGui::TextColored(ImVec4(0.35f, 0.75f, 1.0f, 1.0f), "DLSS MODE");
+      ImGui::TextWrapped(
+         "DLAA는 현재 설정된 해상도 그대로 렌더링한 후, AI 기반 안티앨리어싱을 적용합니다.\n"
+         "DLAA 자체가 AI 기반 안티앨리어싱을 적용하므로 게임의 내장 안티앨리어싱과 함께 사용하는 것은 권장하지 않습니다.");
+      ImGui::TextWrapped(
+         "Quality는 약 67%, Balanced는 약 58%, Performance는 약 50%, Ultra Performance는 약 33% 해상도로 렌더링한 후\n"
+         "현재 설정된 해상도로 업스케일링합니다.");
 
       ImGui::Spacing();
       ImGui::TextColored(ImVec4(1.0f, 0.4118f, 0.7059f, 1.0f), "HDR");
