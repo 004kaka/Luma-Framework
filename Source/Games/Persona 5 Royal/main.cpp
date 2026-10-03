@@ -1422,6 +1422,16 @@ public:
       // ==================================================================
       // Persona 5 Royal용 KAKA HDR / Debug UI 영역입니다.
 
+      // 상단 완충 영역: 탭 직후의 클릭 오입력을 줄이기 위해 2줄 여백, 구분선, 8줄 여백, 구분선을 배치합니다.
+      ImGui::Spacing();
+      ImGui::Spacing();
+      ImGui::Separator();
+      ImGui::Dummy(ImVec2(0.0f, ImGui::GetTextLineHeightWithSpacing() * 8.0f));
+      ImGui::Separator();
+
+      // UI 색상 체계는 장식 목적이 아니라 정보의 종류와 중요도를 시각적으로 구분하여 가독성을 높이기 위해 사용합니다.
+      // Bright Yellow는 핵심 ACTIVE 상태, Pink는 HDR 관련 제목, Green은 보조 상태/정보를 구분하는 데 사용합니다.
+
       // ------------------------------------------------------------------
       // 1. 기존 Persona 5 Royal 그래픽 설정
       //    ReShade/Luma에서 제공되는 DLSS / DLSS Preset 바로 아래에 위치하도록
@@ -1561,7 +1571,7 @@ public:
       // ------------------------------------------------------------------
       // ------------------------------------------------------------------
       ImGui::Separator();
-      ImGui::TextColored(ImVec4(1.0f, 0.60f, 0.20f, 1.0f), "HDR OUTPUT");
+      ImGui::TextColored(ImVec4(1.0f, 0.4118f, 0.7059f, 1.0f), "HDR OUTPUT");
       ImGui::Separator();
 
       if (hdr_output_path_configured)
@@ -1655,7 +1665,7 @@ public:
       // ------------------------------------------------------------------
       // ------------------------------------------------------------------
       ImGui::Separator();
-      ImGui::TextColored(ImVec4(1.0f, 0.60f, 0.20f, 1.0f), "HDR OUTPUT PATH");
+      ImGui::TextColored(ImVec4(1.0f, 0.4118f, 0.7059f, 1.0f), "HDR OUTPUT PATH");
       ImGui::Separator();
 
       ImGui::Text("Swapchain Format : ");
@@ -1688,8 +1698,6 @@ public:
       // ------------------------------------------------------------------
       ImGui::Spacing();
       ImGui::Separator();
-      ImGui::Spacing();
-      ImGui::Separator();
       ImGui::TextColored(ImVec4(0.80f, 0.80f, 0.80f, 1.0f), "DEBUG INFORMATION / 도움말");
       ImGui::Separator();
 
@@ -1698,57 +1706,62 @@ public:
          "현재 표시하는 DLSS는 Frame Generation이 아니라 Super Resolution 경로입니다.\n"
          "낮은 해상도로 렌더링한 화면을 더 높은 출력 해상도에 맞게 재구성하는 기능입니다.");
       ImGui::TextWrapped(
-         "위의 DLSS ACTIVE 표시는 Luma의 SR 구현체 선택 상태와 실제 최근 SR Draw 성공 여부를 함께 확인하여 판단합니다. "
+         "위의 DLSS ACTIVE 표시는 Luma의 SR 구현체 선택 상태와 실제 최근 SR Draw 성공 여부를 함께 확인하여 판단합니다.\n"
          "따라서 단순히 설정 메뉴에서 켜져 있다는 것만 보고 ACTIVE로 표시하지 않습니다.");
 
       ImGui::Spacing();
-      ImGui::TextColored(ImVec4(1.0f, 0.60f, 0.20f, 1.0f), "HDR");
+      ImGui::TextColored(ImVec4(1.0f, 0.4118f, 0.7059f, 1.0f), "HDR");
       ImGui::TextWrapped(
-         "HDR ACTIVE는 이 코드에서 확인 가능한 HDR 출력 경로를 종합한 상태입니다. "
+         "HDR ACTIVE는 이 코드에서 확인 가능한 HDR 출력 경로를 종합한 상태입니다.\n"
          "16비트 실수형 백버퍼, scRGB 색 공간, Luma display composition 우회 설정이 모두 맞아야 활성 상태로 표시합니다.");
       ImGui::TextWrapped(
-         "중요: 이 상태는 게임 내부의 HDR 출력 경로가 활성화되었다는 의미입니다. "
+         "중요: 이 상태는 게임 내부의 HDR 출력 경로가 활성화되었다는 의미입니다.\n"
          "실제 모니터가 HDR 모드로 전환되었는지 또는 최종 패널이 어떤 신호를 표시하는지까지 이 UI가 직접 측정하는 것은 아닙니다.");
 
       ImGui::Spacing();
       ImGui::TextColored(ImVec4(0.75f, 0.75f, 1.0f, 1.0f), "R16G16B16A16_FLOAT란?");
       ImGui::TextWrapped(
-         "16비트 실수형 백버퍼입니다. SDR보다 더 넓은 밝기 범위의 값을 정밀하게 저장할 수 있는 출력 형식입니다. "
+         "16비트 실수형 백버퍼입니다.\n"
+         "SDR보다 더 넓은 밝기 범위의 값을 정밀하게 저장할 수 있는 출력 형식입니다.\n"
          "하지만 이 형식 하나만 바뀐다고 HDR 출력이 자동으로 완성되는 것은 아닙니다.");
 
       ImGui::TextColored(ImVec4(0.75f, 0.75f, 1.0f, 1.0f), "scRGB란?");
       ImGui::TextWrapped(
-         "scRGB는 일반 SDR보다 넓은 밝기 범위의 값을 다음 출력 단계로 전달할 수 있는 색 공간입니다. "
+         "scRGB는 일반 SDR보다 넓은 밝기 범위의 값을 다음 출력 단계로 전달할 수 있는 색 공간입니다.\n"
          "쉽게 말하면 더 밝은 빛의 정보를 담아 전달하기 위한 통로입니다.");
 
       ImGui::TextColored(ImVec4(0.75f, 0.75f, 1.0f, 1.0f), "Depth / Motion Vector란?");
       ImGui::TextWrapped(
-         "Depth는 화면 속 물체가 얼마나 가까이 또는 멀리 있는지를 나타내는 깊이 정보입니다. "
-         "Motion Vector는 화면 속 물체가 프레임 사이에서 어느 방향으로 움직였는지를 나타내는 정보입니다. "
+         "Depth는 화면 속 물체가 얼마나 가까이 또는 멀리 있는지를 나타내는 깊이 정보입니다.\n"
+         "Motion Vector는 화면 속 물체가 프레임 사이에서 어느 방향으로 움직였는지를 나타내는 정보입니다.\n"
          "DLSS Super Resolution의 시간적 재구성에 필요한 입력으로 사용됩니다.");
    }
 
    void PrintImGuiAbout() override
    {
+      // 상단 완충 영역: 탭 직후의 클릭 오입력을 줄이기 위해 2줄 여백, 구분선, 8줄 여백, 구분선을 배치합니다.
       ImGui::Spacing();
       ImGui::Spacing();
+      ImGui::Separator();
+      ImGui::Dummy(ImVec2(0.0f, ImGui::GetTextLineHeightWithSpacing() * 8.0f));
+      ImGui::Separator();
+
+      // About 색상 체계는 장식 목적이 아니라 제목의 계층과 정보의 종류를 구분하여 가독성을 높이기 위해 사용합니다.
+      // 메인 타이틀은 Bright Yellow, 일반 섹션은 Green/Pink를 교차 사용하여 시각적 계층을 만듭니다.
 
       ImGui::Separator();
       ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Persona 5 Royal - Luma KAKA HDR Edition");
       ImGui::Separator();
 
       ImGui::Separator();
-      ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "개선판 목적");
+      ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.6f, 1.0f), "개선판 목적");
       ImGui::Separator();
       ImGui::TextWrapped(
-         "Luma Framework에서 비활성화되어 있던\n"
-         "HDR 색 영역 확장 및 HDR 출력 기능을 활성화하고,");
-      ImGui::TextWrapped(
-         "HDR과 DLSS Super Resolution의 동작 상태를 확인할 수 있는\n"
-         "Debug UI를 추가했습니다.");
+         "Luma Framework에서 비활성화되어 있던 HDR 색 영역 확장 및 HDR 출력 기능을 활성화하고,\n"
+         "HDR과 DLSS Super Resolution의 동작 상태를 확인할 수 있는 Debug UI를 추가했습니다.");
 
       ImGui::Separator();
-      ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "주요 기능");
+      ImGui::TextColored(ImVec4(1.0f, 0.4118f, 0.7059f, 1.0f), "주요 기능");
       ImGui::Separator();
       ImGui::BulletText("HDR 출력 경로 지원");
       ImGui::BulletText("scRGB 출력 경로");
@@ -1757,20 +1770,21 @@ public:
       ImGui::BulletText("Persona 5 Royal 그래픽 설정 개선");
 
       ImGui::Separator();
-      ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Version 3");
+      ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.6f, 1.0f), "KAKA 에디션 버전 V4");
       ImGui::Separator();
 
-      ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Change Log");
+      ImGui::Separator();
+      ImGui::TextColored(ImVec4(1.0f, 0.4118f, 0.7059f, 1.0f), "변경 내역");
+      ImGui::Separator();
       ImGui::TextWrapped("UI 개선");
-      ImGui::TextWrapped("- 2026년 10월 3일 05시 14분");
+      ImGui::TextWrapped("- 2026년 10월 3일 06시 14분");
 
       ImGui::Separator();
-      ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Credits");
+      ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.6f, 1.0f), "Credits");
       ImGui::Separator();
       ImGui::TextWrapped(
-         "이 프로젝트는 Luma Framework를 기반으로 제작되었습니다. "
-         "원본 프로젝트와 포함된 외부 라이브러리의 저작권 및 라이선스 고지는 "
-         "배포본의 소스/라이선스 파일을 확인하십시오.");
+         "이 프로젝트는 Luma Framework를 기반으로 제작되었습니다.\n"
+         "원본 프로젝트와 포함된 외부 라이브러리의 저작권 및 라이선스 고지는 배포본의 소스/라이선스 파일을 확인하십시오.");
    }
 };
 
@@ -1780,7 +1794,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
    {
       Globals::SetGlobals(PROJECT_NAME, "Luma KAKA HDR - Persona 5 Royal");
       Globals::DEVELOPMENT_STATE = Globals::ModDevelopmentState::Finished;
-      Globals::VERSION = 3;
+      Globals::VERSION = 4;
 
       // need to patch the code that adds the resolution dependent mip bias to sampler states
       // otherwise mip chain based effects break when the render resolution is 3840x2160
