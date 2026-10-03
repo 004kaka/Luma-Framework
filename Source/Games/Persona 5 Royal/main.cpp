@@ -1592,8 +1592,8 @@ public:
          ImGui::SetNextWindowSizeConstraints(ImVec2(360.0f, 0.0f), ImVec2(360.0f, FLT_MAX));
          ImGui::BeginTooltip();
          ImGui::TextWrapped(
-            "게임의 Shadow Quality가 장면 전환 후 2048로 돌아가는 문제를 보정합니다.\n\n"
-            "변경 후 게임의 Shadow Quality를 다시 적용하거나 게임을 재시작해야 할 수 있습니다.");
+            "게임의 Shadow Quality가 장면 전환 후 2048 해상도로 돌아가는 문제를 보정합니다.\n\n"
+            "선택한 해상도를 적용하려면 게임의 Shadow Quality를 다시 적용하거나 게임을 재시작해야 할 수 있습니다.");
          ImGui::EndTooltip();
       }
 
@@ -1669,7 +1669,7 @@ public:
       if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
       {
          ImGui::BeginTooltip();
-         ImGui::TextUnformatted("현재 Swapchain의 출력 포맷을 표시합니다.");
+         ImGui::TextUnformatted("최종 화면을 출력하기 위해 사용하는 색상 데이터의 저장 형식을 보여줍니다. `R16G16B16A16_FLOAT`는 HDR에 필요한 넓은 밝기 범위의 값을 전달할 수 있는 16비트 실수형 출력 형식입니다.");
          ImGui::EndTooltip();
       }
       ImGui::SameLine();
@@ -1681,7 +1681,7 @@ public:
       if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
       {
          ImGui::BeginTooltip();
-         ImGui::TextUnformatted("현재 HDR 출력에 사용되는 Color Space를 표시합니다.");
+         ImGui::TextUnformatted("HDR 화면에 더 넓은 밝기 범위의 정보를 전달하기 위해 사용하는 색 공간입니다. 현재 표시되는 `scRGB`는 HDR 출력 경로에 구성된 색 공간을 의미합니다.");
          ImGui::EndTooltip();
       }
       ImGui::SameLine();
@@ -1695,7 +1695,7 @@ public:
       if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
       {
          ImGui::BeginTooltip();
-         ImGui::TextUnformatted("ReShade가 현재 사용 중인 Swapchain Color Space를 표시합니다.");
+         ImGui::TextUnformatted("ReShade가 현재 게임의 Swapchain을 어떤 Color Space로 인식하고 있는지 보여줍니다. HDR 출력 설정과 실제 ReShade 측의 인식 상태를 비교할 때 사용할 수 있습니다.");
          ImGui::EndTooltip();
       }
       ImGui::SameLine();
@@ -1725,7 +1725,7 @@ public:
       if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
       {
          ImGui::BeginTooltip();
-         ImGui::TextUnformatted("Luma가 현재 감지한 HDR 활성 상태를 표시합니다.");
+         ImGui::TextUnformatted("Luma가 현재 HDR이 활성화된 상태인지 판단한 결과입니다. `ACTIVE`로 표시되면 Luma의 HDR 감지 경로에서 HDR 상태가 활성화된 것으로 판단하고 있음을 의미합니다.");
          ImGui::EndTooltip();
       }
       ImGui::SameLine();
@@ -1749,7 +1749,7 @@ public:
       if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
       {
          ImGui::BeginTooltip();
-         ImGui::TextUnformatted("Luma의 HDR 출력 설정 상태를 표시합니다.");
+         ImGui::TextUnformatted("현재 HDR 출력 경로가 필요한 조건을 갖추었는지 보여줍니다. `CONFIGURED / ACTIVE`는 이 UI에서 확인하는 HDR 출력 구성 조건이 모두 충족되었음을 의미합니다.");
          ImGui::EndTooltip();
       }
       ImGui::SameLine();
@@ -1874,7 +1874,7 @@ public:
       if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
       {
          ImGui::BeginTooltip();
-         ImGui::TextUnformatted("Luma Super Resolution 구현의 현재 활성화 상태를 표시합니다.");
+         ImGui::TextUnformatted("Luma Framework의 Super Resolution 구현체가 현재 선택되어 있는지를 보여줍니다. `ENABLED`는 Luma의 SR 경로가 현재 선택된 상태임을 의미합니다.");
          ImGui::EndTooltip();
       }
       ImGui::SameLine();
@@ -1888,7 +1888,7 @@ public:
          if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
          {
             ImGui::BeginTooltip();
-            ImGui::TextUnformatted("가장 최근 Super Resolution Draw 호출 결과를 표시합니다.");
+            ImGui::TextUnformatted("마지막으로 시도한 Super Resolution 처리의 결과를 보여줍니다. `SUCCESS`는 Luma SR 구현체가 성공을 반환한 상태이며, `FAILED`는 실패한 상태이고 `WAITING`은 아직 처리 결과가 기록되지 않은 상태입니다.");
             ImGui::EndTooltip();
          }
          ImGui::SameLine();
@@ -1896,8 +1896,14 @@ public:
             sr_last_success ? ImVec4(0.20f, 1.0f, 0.35f, 1.0f) : ImVec4(1.0f, 0.25f, 0.25f, 1.0f),
             "%s", sr_last_success ? "SUCCESS" : "FAILED");
 
-         ImGui::Text("Last SR Frame     : %llu",
+         ImGui::Text("Last SR Frame     ⓘ : %llu",
             static_cast<unsigned long long>(game_device_data.debug_sr_last_frame));
+         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+         {
+            ImGui::BeginTooltip();
+            ImGui::TextUnformatted("Luma가 마지막 SR 처리 정보를 기록할 때 사용한 프레임 번호를 보여줍니다. SR 처리 결과가 언제 기록되었는지 추적하기 위한 디버그 정보입니다.");
+            ImGui::EndTooltip();
+         }
 
          ImGui::Text("Input Resolution ⓘ  : %ux%u",
             game_device_data.debug_sr_last_render_resolution.x,
@@ -1905,7 +1911,7 @@ public:
          if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
          {
             ImGui::BeginTooltip();
-            ImGui::TextUnformatted("Super Resolution에 입력되는 렌더링 해상도를 표시합니다.");
+            ImGui::TextUnformatted("SR 처리가 적용되기 직전의 게임 렌더링 해상도를 보여줍니다. Output Resolution보다 낮다면 낮은 해상도로 렌더링한 화면을 더 높은 출력 해상도로 처리하는 경로임을 확인할 수 있습니다.");
             ImGui::EndTooltip();
          }
 
@@ -1915,7 +1921,7 @@ public:
          if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
          {
             ImGui::BeginTooltip();
-            ImGui::TextUnformatted("Super Resolution 처리 후 출력되는 해상도를 표시합니다.");
+            ImGui::TextUnformatted("SR 처리가 목표로 하는 최종 화면 해상도입니다. Input Resolution과 함께 확인하면 현재 게임이 어느 해상도에서 렌더링되고 어느 해상도로 출력되는지 알 수 있습니다.");
             ImGui::EndTooltip();
          }
 
@@ -1927,7 +1933,7 @@ public:
          if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
          {
             ImGui::BeginTooltip();
-            ImGui::TextUnformatted("현재 사용 중인 Super Resolution 모드를 표시합니다.");
+            ImGui::TextUnformatted("마지막 SR 처리의 입력 해상도와 출력 해상도를 비교하여 현재 처리 경로를 보여줍니다. 출력 해상도가 입력 해상도보다 높으면 `SUPER RESOLUTION / UPSCALING`, 그렇지 않으면 `NATIVE-RESOLUTION SR PATH`로 표시됩니다.");
             ImGui::EndTooltip();
          }
          ImGui::SameLine();
@@ -1938,7 +1944,7 @@ public:
          if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
          {
             ImGui::BeginTooltip();
-            ImGui::TextUnformatted("Super Resolution에 사용되는 Depth 데이터의 상태를 표시합니다.");
+            ImGui::TextUnformatted("화면 속 물체의 깊이 관계를 나타내는 데이터입니다. Super Resolution의 화면 재구성에 필요한 입력 중 하나이며, `AVAILABLE`은 마지막 SR 처리에서 해당 데이터가 확인되었음을 의미합니다.");
             ImGui::EndTooltip();
          }
          ImGui::SameLine();
@@ -1950,7 +1956,7 @@ public:
          if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
          {
             ImGui::BeginTooltip();
-            ImGui::TextUnformatted("Super Resolution에 사용되는 Motion Vector 데이터의 상태를 표시합니다.");
+            ImGui::TextUnformatted("프레임 사이의 움직임을 나타내는 데이터로, Super Resolution의 시간적 화면 재구성에 사용됩니다. `AVAILABLE`은 마지막 SR 처리에서 Motion Vector 데이터가 확인되었음을 의미합니다.");
             ImGui::EndTooltip();
          }
          ImGui::SameLine();
@@ -1964,7 +1970,7 @@ public:
          if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
          {
             ImGui::BeginTooltip();
-            ImGui::TextUnformatted("가장 최근 Super Resolution Draw 호출 결과를 표시합니다.");
+            ImGui::TextUnformatted("마지막으로 시도한 Super Resolution 처리의 결과를 보여줍니다. `SUCCESS`는 Luma SR 구현체가 성공을 반환한 상태이며, `FAILED`는 실패한 상태이고 `WAITING`은 아직 처리 결과가 기록되지 않은 상태입니다.");
             ImGui::EndTooltip();
          }
          ImGui::SameLine();
@@ -2076,19 +2082,29 @@ public:
       ImGui::BulletText("Persona 5 Royal 그래픽 설정 개선");
 
       ImGui::Separator();
-      ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.6f, 1.0f), "KAKA 에디션 버전 V10");
+      ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.6f, 1.0f), "KAKA 에디션 버전 V11");
       ImGui::Separator();
 
       ImGui::Separator();
-      ImGui::TextColored(ImVec4(1.0f, 0.4118f, 0.7059f, 1.0f), "변경 내역");
+      ImGui::TextColored(ImVec4(1.0f, 0.4118f, 0.7059f, 1.0f), "개선 내용");
       ImGui::Separator();
-      ImGui::TextWrapped("V8 정상 변경사항 유지");
-      ImGui::TextWrapped("V9-Fix2 - ReShade 현재 Swapchain Color Space를 실제 ReShade API로 감지/표시");
-      ImGui::TextWrapped("V9-Fix2 - Luma 실제 HDR Detection 경로로 HDR 상태 감지/표시");
-      ImGui::TextWrapped("V9-Fix2 - V9의 잘못된 DXGI/ReShade 탐지 API 사용 제거");
-      ImGui::TextWrapped("V9-Fix2 - HDR ACTIVE STATUS / HDR 출력 검증 UI 명칭 및 판정 연결 수정");
-      ImGui::TextWrapped("V9-Fix2 - Display Composition UI 표시 주석 유지");
-      ImGui::TextWrapped("- 2026년 10월 3일 06시 14분");
+      ImGui::TextWrapped(
+         "원본 Luma Framework를 기반으로 Persona 5 Royal의 HDR 출력과 DLSS / Super Resolution 상태를 보다 쉽게 확인할 수 있도록 개선했습니다.");
+      ImGui::BulletText("HDR 출력 경로 개선");
+      ImGui::TextWrapped(
+         "HDR 화면 출력을 위한 scRGB 기반 출력 경로를 지원하고, HDR에 필요한 넓은 밝기 범위의 색상 정보를 보다 적절하게 전달할 수 있도록 개선했습니다.");
+      ImGui::BulletText("HDR 상태 확인 개선");
+      ImGui::TextWrapped(
+         "현재 사용 중인 Swapchain Color Space, Luma의 HDR 감지 결과, HDR 출력 경로의 구성 상태를 한 화면에서 확인할 수 있도록 개선했습니다.");
+      ImGui::BulletText("DLSS / Super Resolution 상태 확인 개선");
+      ImGui::TextWrapped(
+         "마지막 Super Resolution 처리 결과와 프레임, 입력·출력 해상도, SR 처리 경로, Depth 및 Motion Vector 상태를 확인할 수 있도록 개선했습니다.");
+      ImGui::BulletText("상태 설명 개선");
+      ImGui::TextWrapped(
+         "HDR과 DLSS / Super Resolution 관련 주요 항목에 설명을 제공하여 각 상태와 값이 무엇을 의미하는지 쉽게 확인할 수 있도록 개선했습니다.");
+      ImGui::BulletText("사용자용 Debug UI 개선");
+      ImGui::TextWrapped(
+         "기존 Settings 영역의 구조를 유지하면서 HDR과 DLSS / Super Resolution의 종합 상태와 세부 정보를 순서대로 확인할 수 있도록 구성했습니다.");
 
       ImGui::Separator();
       ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.6f, 1.0f), "CREDITS");
@@ -2105,7 +2121,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
    {
       Globals::SetGlobals(PROJECT_NAME, "Luma KAKA HDR - Persona 5 Royal");
       Globals::DEVELOPMENT_STATE = Globals::ModDevelopmentState::Finished;
-      Globals::VERSION = 5;
+      Globals::VERSION = 11;
 
       // need to patch the code that adds the resolution dependent mip bias to sampler states
       // otherwise mip chain based effects break when the render resolution is 3840x2160
