@@ -1627,11 +1627,142 @@ public:
          game_device_data.luma_hdr_detection_valid && game_device_data.luma_hdr_active;
 
       // ------------------------------------------------------------------
+      // HDR summary
+      // ------------------------------------------------------------------
+      // ------------------------------------------------------------------
+      ImGui::Separator();
+      ImGui::TextColored(ImVec4(1.0f, 0.4118f, 0.7059f, 1.0f), "HDR ACTIVE STATUS / HDR 활성 상태");
+      ImGui::Separator();
+
+      if (!game_device_data.luma_hdr_detection_valid)
+      {
+         ImGui::TextColored(ImVec4(0.35f, 0.75f, 1.0f, 1.0f), "● 보류");
+         ImGui::TextWrapped(
+            "Luma HDR Detection 결과를 아직 확인하지 못했습니다. HDR 상태를 임의로 단정하지 않습니다.");
+      }
+      else if (hdr_active_status)
+      {
+         ImGui::TextColored(ImVec4(0.20f, 1.0f, 0.35f, 1.0f), "● 활성화");
+         ImGui::TextWrapped(
+            "Luma HDR 출력 경로와 Luma HDR Detection 결과가 모두 활성 상태로 확인되었습니다.");
+      }
+      else
+      {
+         ImGui::TextColored(ImVec4(1.0f, 0.25f, 0.25f, 1.0f), "● 비활성화");
+         ImGui::TextWrapped(
+            "Luma HDR 출력 경로 또는 Luma HDR Detection 결과가 활성 상태가 아닙니다. 아래 HDR 세부 항목을 확인하십시오.");
+      }
+
+      ImGui::Spacing();
+      ImGui::Separator();
+      ImGui::Spacing();
+
+      // ------------------------------------------------------------------
+      // 4. HDR 세부 확인
+      // ------------------------------------------------------------------
+      // ------------------------------------------------------------------
+      ImGui::Separator();
+      ImGui::TextColored(ImVec4(1.0f, 0.4118f, 0.7059f, 1.0f), "HDR OUTPUT VERIFICATION / HDR 출력 검증");
+      ImGui::Separator();
+
+      ImGui::Text("Swapchain Format ⓘ : ");
+      if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+      {
+         ImGui::BeginTooltip();
+         ImGui::TextUnformatted("현재 Swapchain의 출력 포맷을 표시합니다.");
+         ImGui::EndTooltip();
+      }
+      ImGui::SameLine();
+      ImGui::TextColored(
+         format_upgrade_configured ? ImVec4(0.20f, 1.0f, 0.35f, 1.0f) : ImVec4(1.0f, 0.25f, 0.25f, 1.0f),
+         "%s", format_upgrade_configured ? "R16G16B16A16_FLOAT" : "NOT CONFIGURED");
+
+      ImGui::Text("Color Space : scRGB ⓘ");
+      if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+      {
+         ImGui::BeginTooltip();
+         ImGui::TextUnformatted("현재 HDR 출력에 사용되는 Color Space를 표시합니다.");
+         ImGui::EndTooltip();
+      }
+      ImGui::SameLine();
+      ImGui::TextColored(
+         scrgb_configured ? ImVec4(0.20f, 1.0f, 0.35f, 1.0f) : ImVec4(1.0f, 0.25f, 0.25f, 1.0f),
+         "%s", scrgb_configured ? "scRGB" : "NOT CONFIGURED");
+
+      // 한글: ReShade의 현재 Swapchain Color Space를 기존 scRGB 항목과 분리하여 표시합니다.
+      // English: Display ReShade's current swapchain color space separately from the existing scRGB item.
+      ImGui::Text("ReShade Color Space ⓘ : ");
+      if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+      {
+         ImGui::BeginTooltip();
+         ImGui::TextUnformatted("ReShade가 현재 사용 중인 Swapchain Color Space를 표시합니다.");
+         ImGui::EndTooltip();
+      }
+      ImGui::SameLine();
+      if (game_device_data.reshade_swapchain_color_space_valid)
+      {
+         const char* color_space_name = "OTHER";
+         switch (game_device_data.reshade_swapchain_color_space)
+         {
+         case reshade::api::color_space::srgb: color_space_name = "sRGB"; break;
+         case reshade::api::color_space::scrgb: color_space_name = "scRGB linear"; break;
+         case reshade::api::color_space::hdr10_pq: color_space_name = "HDR10 PQ"; break;
+         case reshade::api::color_space::hdr10_hlg: color_space_name = "HDR10 HLG"; break;
+         default: break;
+         }
+         ImGui::TextColored(ImVec4(0.20f, 1.0f, 0.35f, 1.0f), "%s", color_space_name);
+      }
+      else
+      {
+         ImGui::TextColored(ImVec4(0.35f, 0.75f, 1.0f, 1.0f), "PENDING");
+      }
+
+      // 한글: Luma Framework가 실제로 판정한 HDR 상태를 표시합니다.
+      // 기존 Color Space : scRGB와 ReShade Color Space에는 연결하지 않습니다.
+      // English: Display the HDR state determined by Luma Framework.
+      // Keep it independent from the existing scRGB and ReShade color-space items.
+      ImGui::Text("Luma HDR Detection ⓘ : ");
+      if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+      {
+         ImGui::BeginTooltip();
+         ImGui::TextUnformatted("Luma가 현재 감지한 HDR 활성 상태를 표시합니다.");
+         ImGui::EndTooltip();
+      }
+      ImGui::SameLine();
+      if (!game_device_data.luma_hdr_detection_valid)
+         ImGui::TextColored(ImVec4(0.35f, 0.75f, 1.0f, 1.0f), "보류");
+      else
+         ImGui::TextColored(game_device_data.luma_hdr_active ? ImVec4(0.20f, 1.0f, 0.35f, 1.0f) : ImVec4(1.0f, 0.25f, 0.25f, 1.0f),
+            "%s", game_device_data.luma_hdr_active ? "활성화" : "비활성화");
+
+      // 한글: Display Composition은 기능을 삭제하지 않고 보존합니다.
+      // 현재 UI에서는 별도로 표시할 필요가 없어 표시 코드만 주석 처리합니다.
+      // English: The Display Composition logic is preserved and not removed.
+      // Its UI display code is commented out because it is not necessary to display separately in the current V9 interface.
+      // ImGui::Text("Display Composition: ");
+      // ImGui::SameLine();
+      // ImGui::TextColored(
+      //    display_composition_disabled ? ImVec4(0.20f, 1.0f, 0.35f, 1.0f) : ImVec4(1.0f, 0.25f, 0.25f, 1.0f),
+      //    "%s", display_composition_disabled ? "DISABLED / BYPASS" : "ENABLED");
+
+      ImGui::Text("HDR Output Status ⓘ : ");
+      if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+      {
+         ImGui::BeginTooltip();
+         ImGui::TextUnformatted("Luma의 HDR 출력 설정 상태를 표시합니다.");
+         ImGui::EndTooltip();
+      }
+      ImGui::SameLine();
+      ImGui::TextColored(
+         hdr_output_path_configured ? ImVec4(0.20f, 1.0f, 0.35f, 1.0f) : ImVec4(1.0f, 0.25f, 0.25f, 1.0f),
+         "%s", hdr_output_path_configured ? "CONFIGURED / ACTIVE" : "INCOMPLETE");
+
+      // ------------------------------------------------------------------
       // DLSS / SUPER RESOLUTION summary
       // ------------------------------------------------------------------
       // ------------------------------------------------------------------
       ImGui::Separator();
-      ImGui::TextColored(ImVec4(0.35f, 0.75f, 1.0f, 1.0f), "DLSS / SUPER RESOLUTION");
+      ImGui::TextColored(ImVec4(0.35f, 0.75f, 1.0f, 1.0f), "DLSS / SUPER RESOLUTION / DLSS 업스케일");
       ImGui::Separator();
 
       if (dlss_active)
@@ -1667,7 +1798,7 @@ public:
       //    이 영역은 SR 렌더링 경로를 변경하지 않고 현재 상태를 읽어 표시만 합니다.
       // ------------------------------------------------------------------
       ImGui::Separator();
-      ImGui::TextColored(ImVec4(1.0f, 0.4118f, 0.7059f, 1.0f), "DLSS MODE");
+      ImGui::TextColored(ImVec4(1.0f, 0.4118f, 0.7059f, 1.0f), "DLSS MODE / DLSS 모드");
       ImGui::Separator();
 
       if (sr_last_attempted &&
@@ -1731,116 +1862,21 @@ public:
       ImGui::Spacing();
 
       // ------------------------------------------------------------------
-      // HDR summary
-      // ------------------------------------------------------------------
-      // ------------------------------------------------------------------
-      ImGui::Separator();
-      ImGui::TextColored(ImVec4(1.0f, 0.4118f, 0.7059f, 1.0f), "HDR ACTIVE STATUS / HDR 활성 상태");
-      ImGui::Separator();
-
-      if (!game_device_data.luma_hdr_detection_valid)
-      {
-         ImGui::TextColored(ImVec4(0.35f, 0.75f, 1.0f, 1.0f), "● 보류");
-         ImGui::TextWrapped(
-            "Luma HDR Detection 결과를 아직 확인하지 못했습니다. HDR 상태를 임의로 단정하지 않습니다.");
-      }
-      else if (hdr_active_status)
-      {
-         ImGui::TextColored(ImVec4(0.20f, 1.0f, 0.35f, 1.0f), "● 활성화");
-         ImGui::TextWrapped(
-            "Luma HDR 출력 경로와 Luma HDR Detection 결과가 모두 활성 상태로 확인되었습니다.");
-      }
-      else
-      {
-         ImGui::TextColored(ImVec4(1.0f, 0.25f, 0.25f, 1.0f), "● 비활성화");
-         ImGui::TextWrapped(
-            "Luma HDR 출력 경로 또는 Luma HDR Detection 결과가 활성 상태가 아닙니다. 아래 HDR 세부 항목을 확인하십시오.");
-      }
-
-      ImGui::Spacing();
-      ImGui::Separator();
-      ImGui::Spacing();
-
-      // ------------------------------------------------------------------
-      // 4. HDR 세부 확인
-      // ------------------------------------------------------------------
-      // ------------------------------------------------------------------
-      ImGui::Separator();
-      ImGui::TextColored(ImVec4(1.0f, 0.4118f, 0.7059f, 1.0f), "HDR OUTPUT VERIFICATION / HDR 출력 검증");
-      ImGui::Separator();
-
-      ImGui::Text("Swapchain Format : ");
-      ImGui::SameLine();
-      ImGui::TextColored(
-         format_upgrade_configured ? ImVec4(0.20f, 1.0f, 0.35f, 1.0f) : ImVec4(1.0f, 0.25f, 0.25f, 1.0f),
-         "%s", format_upgrade_configured ? "R16G16B16A16_FLOAT" : "NOT CONFIGURED");
-
-      ImGui::Text("Color Space      : ");
-      ImGui::SameLine();
-      ImGui::TextColored(
-         scrgb_configured ? ImVec4(0.20f, 1.0f, 0.35f, 1.0f) : ImVec4(1.0f, 0.25f, 0.25f, 1.0f),
-         "%s", scrgb_configured ? "scRGB" : "NOT CONFIGURED");
-
-      // 한글: ReShade의 현재 Swapchain Color Space를 기존 scRGB 항목과 분리하여 표시합니다.
-      // English: Display ReShade's current swapchain color space separately from the existing scRGB item.
-      ImGui::Text("ReShade Color Space : ");
-      ImGui::SameLine();
-      if (game_device_data.reshade_swapchain_color_space_valid)
-      {
-         const char* color_space_name = "OTHER";
-         switch (game_device_data.reshade_swapchain_color_space)
-         {
-         case reshade::api::color_space::srgb: color_space_name = "sRGB"; break;
-         case reshade::api::color_space::scrgb: color_space_name = "scRGB linear"; break;
-         case reshade::api::color_space::hdr10_pq: color_space_name = "HDR10 PQ"; break;
-         case reshade::api::color_space::hdr10_hlg: color_space_name = "HDR10 HLG"; break;
-         default: break;
-         }
-         ImGui::TextColored(ImVec4(0.20f, 1.0f, 0.35f, 1.0f), "%s", color_space_name);
-      }
-      else
-      {
-         ImGui::TextColored(ImVec4(0.35f, 0.75f, 1.0f, 1.0f), "PENDING");
-      }
-
-      // 한글: Luma Framework가 실제로 판정한 HDR 상태를 표시합니다.
-      // 기존 Color Space : scRGB와 ReShade Color Space에는 연결하지 않습니다.
-      // English: Display the HDR state determined by Luma Framework.
-      // Keep it independent from the existing scRGB and ReShade color-space items.
-      ImGui::Text("Luma HDR Detection : ");
-      ImGui::SameLine();
-      if (!game_device_data.luma_hdr_detection_valid)
-         ImGui::TextColored(ImVec4(0.35f, 0.75f, 1.0f, 1.0f), "보류");
-      else
-         ImGui::TextColored(game_device_data.luma_hdr_active ? ImVec4(0.20f, 1.0f, 0.35f, 1.0f) : ImVec4(1.0f, 0.25f, 0.25f, 1.0f),
-            "%s", game_device_data.luma_hdr_active ? "활성화" : "비활성화");
-
-      // 한글: Display Composition은 기능을 삭제하지 않고 보존합니다.
-      // 현재 UI에서는 별도로 표시할 필요가 없어 표시 코드만 주석 처리합니다.
-      // English: The Display Composition logic is preserved and not removed.
-      // Its UI display code is commented out because it is not necessary to display separately in the current V9 interface.
-      // ImGui::Text("Display Composition: ");
-      // ImGui::SameLine();
-      // ImGui::TextColored(
-      //    display_composition_disabled ? ImVec4(0.20f, 1.0f, 0.35f, 1.0f) : ImVec4(1.0f, 0.25f, 0.25f, 1.0f),
-      //    "%s", display_composition_disabled ? "DISABLED / BYPASS" : "ENABLED");
-
-      ImGui::Text("HDR Output Status : ");
-      ImGui::SameLine();
-      ImGui::TextColored(
-         hdr_output_path_configured ? ImVec4(0.20f, 1.0f, 0.35f, 1.0f) : ImVec4(1.0f, 0.25f, 0.25f, 1.0f),
-         "%s", hdr_output_path_configured ? "CONFIGURED / ACTIVE" : "INCOMPLETE");
-
-      // ------------------------------------------------------------------
       // ⑧ DLSS / SR STATUS
       // 기존 V8의 DLSS/SR 상태, Draw() Result, Tooltip 및 관련 설명을 유지합니다.
       // ------------------------------------------------------------------
       // ------------------------------------------------------------------
       ImGui::Separator();
-      ImGui::TextColored(ImVec4(0.35f, 0.75f, 1.0f, 1.0f), "DLSS / SR STATUS");
+      ImGui::TextColored(ImVec4(0.35f, 0.75f, 1.0f, 1.0f), "DLSS / SR STATUS / DLSS 업스케일 상태");
       ImGui::Separator();
 
-      ImGui::Text("SR Implementation : ");
+      ImGui::Text("SR Implementation ⓘ : ");
+      if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+      {
+         ImGui::BeginTooltip();
+         ImGui::TextUnformatted("Luma Super Resolution 구현의 현재 활성화 상태를 표시합니다.");
+         ImGui::EndTooltip();
+      }
       ImGui::SameLine();
       ImGui::TextColored(
          sr_selected ? ImVec4(0.20f, 1.0f, 0.35f, 1.0f) : ImVec4(0.70f, 0.70f, 0.70f, 1.0f),
@@ -1848,7 +1884,13 @@ public:
 
       if (sr_last_attempted)
       {
-         ImGui::Text("Last SR Draw      : ");
+         ImGui::Text("Last SR Draw      ⓘ : ");
+         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+         {
+            ImGui::BeginTooltip();
+            ImGui::TextUnformatted("가장 최근 Super Resolution Draw 호출 결과를 표시합니다.");
+            ImGui::EndTooltip();
+         }
          ImGui::SameLine();
          ImGui::TextColored(
             sr_last_success ? ImVec4(0.20f, 1.0f, 0.35f, 1.0f) : ImVec4(1.0f, 0.25f, 0.25f, 1.0f),
@@ -1857,30 +1899,60 @@ public:
          ImGui::Text("Last SR Frame     : %llu",
             static_cast<unsigned long long>(game_device_data.debug_sr_last_frame));
 
-         ImGui::Text("Input Resolution  : %ux%u",
+         ImGui::Text("Input Resolution ⓘ  : %ux%u",
             game_device_data.debug_sr_last_render_resolution.x,
             game_device_data.debug_sr_last_render_resolution.y);
+         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+         {
+            ImGui::BeginTooltip();
+            ImGui::TextUnformatted("Super Resolution에 입력되는 렌더링 해상도를 표시합니다.");
+            ImGui::EndTooltip();
+         }
 
-         ImGui::Text("Output Resolution : %ux%u",
+         ImGui::Text("Output Resolution ⓘ : %ux%u",
             game_device_data.debug_sr_last_output_resolution.x,
             game_device_data.debug_sr_last_output_resolution.y);
+         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+         {
+            ImGui::BeginTooltip();
+            ImGui::TextUnformatted("Super Resolution 처리 후 출력되는 해상도를 표시합니다.");
+            ImGui::EndTooltip();
+         }
 
          const bool upscaling =
             game_device_data.debug_sr_last_output_resolution.x > game_device_data.debug_sr_last_render_resolution.x &&
             game_device_data.debug_sr_last_output_resolution.y > game_device_data.debug_sr_last_render_resolution.y;
 
-         ImGui::Text("SR Mode           : ");
+         ImGui::Text("SR Mode ⓘ : ");
+         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+         {
+            ImGui::BeginTooltip();
+            ImGui::TextUnformatted("현재 사용 중인 Super Resolution 모드를 표시합니다.");
+            ImGui::EndTooltip();
+         }
          ImGui::SameLine();
          ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f),
             "%s", upscaling ? "SUPER RESOLUTION / UPSCALING" : "NATIVE-RESOLUTION SR PATH");
 
-         ImGui::Text("Depth             : ");
+         ImGui::Text("Depth ⓘ : ");
+         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+         {
+            ImGui::BeginTooltip();
+            ImGui::TextUnformatted("Super Resolution에 사용되는 Depth 데이터의 상태를 표시합니다.");
+            ImGui::EndTooltip();
+         }
          ImGui::SameLine();
          ImGui::TextColored(
             game_device_data.debug_sr_last_depth_available ? ImVec4(0.20f, 1.0f, 0.35f, 1.0f) : ImVec4(1.0f, 0.25f, 0.25f, 1.0f),
             "%s", game_device_data.debug_sr_last_depth_available ? "AVAILABLE" : "MISSING");
 
-         ImGui::Text("Motion Vector     : ");
+         ImGui::Text("Motion Vector ⓘ : ");
+         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+         {
+            ImGui::BeginTooltip();
+            ImGui::TextUnformatted("Super Resolution에 사용되는 Motion Vector 데이터의 상태를 표시합니다.");
+            ImGui::EndTooltip();
+         }
          ImGui::SameLine();
          ImGui::TextColored(
             game_device_data.debug_sr_last_motion_vectors_available ? ImVec4(0.20f, 1.0f, 0.35f, 1.0f) : ImVec4(1.0f, 0.25f, 0.25f, 1.0f),
@@ -1888,7 +1960,13 @@ public:
       }
       else
       {
-         ImGui::Text("Last SR Draw      : ");
+         ImGui::Text("Last SR Draw ⓘ      : ");
+         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+         {
+            ImGui::BeginTooltip();
+            ImGui::TextUnformatted("가장 최근 Super Resolution Draw 호출 결과를 표시합니다.");
+            ImGui::EndTooltip();
+         }
          ImGui::SameLine();
          ImGui::TextColored(ImVec4(1.0f, 0.80f, 0.20f, 1.0f), "WAITING");
       }
@@ -1957,6 +2035,12 @@ public:
          "Depth는 화면 속 물체가 얼마나 가까이 또는 멀리 있는지를 나타내는 깊이 정보입니다.\n"
          "Motion Vector는 화면 속 물체가 프레임 사이에서 어느 방향으로 움직였는지를 나타내는 정보입니다.\n"
          "DLSS Super Resolution의 시간적 재구성에 필요한 입력으로 사용됩니다.");
+
+      ImGui::Spacing();
+      ImGui::TextColored(ImVec4(0.75f, 0.75f, 1.0f, 1.0f), "Color Space 설명");
+      ImGui::TextWrapped("scRGB는 SDR보다 넓은 밝기 범위를 표현할 수 있는 색 공간으로, HDR 출력에서 밝은 영역의 정보를 표현하는 데 사용됩니다.");
+      ImGui::TextWrapped("HDR10은 HDR 영상과 디스플레이 출력에서 널리 사용되는 대표적인 HDR 표현 방식입니다.");
+      ImGui::TextWrapped("scRGB Linear는 scRGB 계열의 색 값을 선형적인 방식으로 다루는 표현입니다.");
    }
 
    void PrintImGuiAbout() override
@@ -1992,7 +2076,7 @@ public:
       ImGui::BulletText("Persona 5 Royal 그래픽 설정 개선");
 
       ImGui::Separator();
-      ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.6f, 1.0f), "KAKA 에디션 버전 V9-Fix2");
+      ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.6f, 1.0f), "KAKA 에디션 버전 V10");
       ImGui::Separator();
 
       ImGui::Separator();
