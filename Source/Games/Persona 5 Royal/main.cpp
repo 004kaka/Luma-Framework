@@ -241,9 +241,11 @@ struct GameDeviceDataPersona5Royal final : public GameDeviceData
    };
 
    HdrDetectionStatus hdr_detection_status = HdrDetectionStatus::Unknown;
-   DXGI_COLOR_SPACE_TYPE hdr_swapchain_color_space = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
+   // [KAKA V8 HDR DETECTION]
+   // 실제 DXGI output이 보고하는 현재 색 공간을 저장합니다.
+   // [KAKA V8 HDR DETECTION]
+   // Stores the current color space reported by the actual DXGI output.
    DXGI_COLOR_SPACE_TYPE hdr_output_color_space = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
-   bool hdr_swapchain_color_space_valid = false;
    bool hdr_output_color_space_valid = false;
    ComPtr<IDXGISwapChain3> hdr_native_swapchain;
 
@@ -301,15 +303,18 @@ public:
    }
 
    // [KAKA V8 HDR DETECTION]
-   // 실제 DXGI swapchain 및 연결된 output의 색 공간을 조회합니다.
-   // [KAKA V8 HDR DETECTION]
-   // Query the actual DXGI swapchain and containing output color spaces.
    // 이 함수는 렌더링 리소스나 출력 형식을 변경하지 않고 읽기 전용 상태만 수집합니다.
+   // [KAKA V8 HDR DETECTION]
    // This function only collects read-only state and does not modify rendering resources or output configuration.
+   // [KAKA V8 HDR DETECTION]
+   // 실제 DXGI output의 현재 색 공간을 조회하여 HDR 상태 판단에 사용합니다.
+   // IDXGISwapChain3에는 GetColorSpace1()이 없으므로 존재하지 않는 API를 호출하지 않습니다.
+   // [KAKA V8 HDR DETECTION]
+   // Query the current color space reported by the actual DXGI output for HDR status.
+   // IDXGISwapChain3 does not expose GetColorSpace1(), so no non-existent API is called.
    static void UpdateHdrDetection(IDXGISwapChain3* native_swapchain, GameDeviceDataPersona5Royal& game_device_data)
    {
       game_device_data.hdr_detection_status = GameDeviceDataPersona5Royal::HdrDetectionStatus::Unknown;
-      game_device_data.hdr_swapchain_color_space_valid = false;
       game_device_data.hdr_output_color_space_valid = false;
 
       if (native_swapchain == nullptr)
@@ -317,14 +322,10 @@ public:
          return;
       }
 
-      const DXGI_COLOR_SPACE_TYPE swapchain_color_space = native_swapchain->GetColorSpace1();
-      game_device_data.hdr_swapchain_color_space = swapchain_color_space;
-      game_device_data.hdr_swapchain_color_space_valid = true;
-
       // [KAKA V8 DXGI OUTPUT QUERY]
-      // 현재 swapchain이 속한 실제 DXGI output의 색 공간을 조회합니다.
+      // 현재 swapchain이 포함된 실제 DXGI output을 조회합니다.
       // [KAKA V8 DXGI OUTPUT QUERY]
-      // Query the color space of the actual DXGI output containing the swapchain.
+      // Query the actual DXGI output containing the current swapchain.
       ComPtr<IDXGIOutput> output;
       if (FAILED(native_swapchain->GetContainingOutput(output.put())))
       {
@@ -347,11 +348,9 @@ public:
       game_device_data.hdr_output_color_space_valid = true;
 
       // [KAKA V8 HDR JUDGMENT]
-      // DXGI가 현재 output을 HDR/scRGB 또는 HDR PQ 색 공간으로 보고하면 활성 상태로 표시합니다.
-      // 그 외의 표준 SDR 색 공간은 비활성 상태로 표시합니다.
+      // DXGI output이 scRGB 또는 HDR10(PQ) 색 공간을 보고하면 HDR 출력이 활성 상태로 판단합니다.
       // [KAKA V8 HDR JUDGMENT]
-      // Mark HDR active when DXGI reports an HDR/scRGB or HDR PQ output color space.
-      // Standard SDR color spaces are reported as inactive.
+      // Treat scRGB or HDR10(PQ) output color spaces reported by DXGI as HDR-active.
       const bool output_is_hdr =
          output_desc.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709 ||
          output_desc.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 ||
@@ -1721,9 +1720,9 @@ public:
 
       ImGui::Text("Color Space      : ");
       ImGui::SameLine();
-      if (game_device_data.hdr_swapchain_color_space_valid)
+      if (game_device_data.hdr_output_color_space_valid)
       {
-         const bool scrgb = game_device_data.hdr_swapchain_color_space == DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709;
+         const bool scrgb = game_device_data.hdr_output_color_space == DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709;
          ImGui::TextColored(scrgb ? ImVec4(0.20f, 1.0f, 0.35f, 1.0f) : ImVec4(0.70f, 0.85f, 1.0f, 1.0f), "%s", scrgb ? "scRGB" : "DXGI DETECTED");
          if (scrgb)
             ImGui::TextWrapped("HDR의 밝은 영역과 색상 정보를 더 넓게 표현할 수 있는 색 공간입니다.");
